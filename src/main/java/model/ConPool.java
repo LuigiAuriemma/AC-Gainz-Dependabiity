@@ -30,7 +30,12 @@ public class ConPool {
         return dataSource.getConnection();
     }
 }
- */
+*/
+
+
+
+
+
 import org.apache.tomcat.jdbc.pool.DataSource;
 import org.apache.tomcat.jdbc.pool.PoolProperties;
 
@@ -46,7 +51,7 @@ public class ConPool {
         if (dataSource == null) {
             PoolProperties p = new PoolProperties();
 
-            String host = System.getenv().getOrDefault("DB_HOST", "db");
+            String host = System.getenv().getOrDefault("DB_HOST", "localhost");
             String port = System.getenv().getOrDefault("DB_PORT", "3306");
             String db   = System.getenv().getOrDefault("DB_NAME", "Progetto_TSW_Dependability");
             String user = System.getenv().getOrDefault("DB_USER", "root");
