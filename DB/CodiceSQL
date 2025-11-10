@@ -1,0 +1,406 @@
+SET NAMES utf8mb4;
+SET collation_connection = 'utf8mb4_unicode_ci';
+
+drop database if exists Progetto_TSW_Dependability;
+create database if not exists Progetto_TSW_Dependability;
+use Progetto_TSW_Dependability;
+
+
+create table if not exists utente(
+  email varchar(100) primary key,
+  password varchar(63) not null,
+  nome varchar(40) not null,
+  cognome varchar(40) not null,
+  codice_fiscale varchar(16),
+  data_di_nascita date,
+  indirizzo varchar(255),
+  numero_di_cellulare varchar(20),
+  poteri tinyint(1) default 0
+);
+
+create table if not exists prodotto(
+	id_prodotto varchar(30) primary key,
+  nome varchar(100) not null,
+  descrizione varchar(3000),
+  categoria varchar(50) not null,
+  immagine varchar(2083) not null,
+  calorie int check (calorie >= 0),
+  carboidrati int check (carboidrati >= 0),
+  proteine int check (proteine >= 0),
+  grassi int check (grassi >= 0)
+);
+
+create table if not exists gusto(
+	id_gusto int AUTO_INCREMENT primary key,
+  nomeGusto varchar(50) not null
+);
+
+create table if not exists confezione(
+	id_confezione int AUTO_INCREMENT primary key,
+  peso int not null check (peso >= 0)
+);
+
+create table if not exists variante(
+	id_variante int AUTO_INCREMENT primary key,
+  id_prodotto_variante varchar(30) not null,
+  id_gusto int not null,
+  id_confezione int not null,
+  prezzo float check (prezzo >= 0.0),
+  `quantità` int check (`quantità` >= 0),
+  sconto int check (sconto >= 0),
+  evidenza tinyint(1) default 0,
+  
+  foreign key (id_prodotto_variante) references prodotto(id_prodotto) on update cascade on delete cascade,
+  foreign key (id_gusto) references gusto(id_gusto) on update cascade on delete cascade,
+  foreign key (id_confezione) references confezione(id_confezione) on update cascade on delete cascade
+);
+
+
+create table if not exists carrello(
+	email_utente varchar(100) not null,
+  id_prodotto varchar(30) not null,
+  id_variante int not null,
+  `quantità` int not null check (`quantità` > 0),
+  prezzo float not null check (prezzo >= 0),
+  
+  primary key(email_utente, id_prodotto, id_variante),
+  foreign key(email_utente) references utente(email) on update cascade on delete cascade,
+  foreign key(id_prodotto) references prodotto(id_prodotto) on update cascade on delete cascade,
+  foreign key(id_variante) references variante(id_variante) on update cascade on delete cascade
+);
+
+CREATE TABLE IF NOT EXISTS ordine(
+    id_ordine INT AUTO_INCREMENT PRIMARY KEY,
+    email_utente VARCHAR(100) NOT NULL,
+    data DATE DEFAULT (CURRENT_DATE),
+    stato VARCHAR(255) DEFAULT 'in esecuzione' NOT NULL,
+    totale FLOAT NOT NULL DEFAULT 0.0 CHECK (totale >= 0.0),
+  	descrizione text,
+    FOREIGN KEY (email_utente) REFERENCES utente(email) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS dettaglio_ordine(
+	id_ordine int not null,
+  id_prodotto varchar(30) not null,
+  id_variante int not null,
+  `quantità` int not null check (`quantità` > 0),
+  prezzo float not null default 0.0 check (prezzo >= 0.0),
+
+  primary key(id_ordine, id_prodotto, id_variante),
+  foreign key(id_ordine) references ordine (id_ordine) on update cascade on delete cascade,
+  foreign key(id_prodotto) references prodotto (id_prodotto) on update cascade on delete cascade,
+  foreign key(id_variante) references variante (id_variante) on update cascade on delete cascade
+)
+;
+
+DELIMITER $$
+
+CREATE TRIGGER updatePriceDettaglioOrdine
+BEFORE INSERT ON dettaglio_ordine
+FOR EACH ROW
+BEGIN
+    DECLARE price DECIMAL(10, 2); -- Utilizzo di DECIMAL per il prezzo per maggiore precisione
+
+    -- Calcoliamo il prezzo basato sulla variante
+    SET price = (
+        SELECT (v.prezzo * (1 - v.sconto / 100) * NEW.`quantità`)
+        FROM variante v
+        WHERE v.id_variante = NEW.id_variante
+    );
+
+    -- Assegniamo il prezzo calcolato alla riga che sta per essere inserita
+    SET NEW.prezzo = price;
+
+END$$
+
+
+CREATE TRIGGER updatePriceDettaglioOrdineBeforeUpdate
+BEFORE UPDATE ON dettaglio_ordine
+FOR EACH ROW
+BEGIN
+    DECLARE price DECIMAL(10, 2);
+
+    -- Calcoliamo il prezzo basato sulla variante
+    SET price = (
+        SELECT (v.prezzo * (1 - v.sconto / 100) * NEW.`quantità`)
+        FROM variante v
+        WHERE v.id_variante = NEW.id_variante
+    );
+
+    -- Assegniamo il prezzo calcolato alla riga che sta per essere aggiornata
+    SET NEW.prezzo = price;
+END$$
+
+
+CREATE TRIGGER aggiorna_prezzo_ordine_onUpdate
+AFTER UPDATE ON dettaglio_ordine
+FOR EACH ROW
+BEGIN
+    DECLARE total DECIMAL(10, 2);  -- Utilizzo di DECIMAL per il totale per maggiore precisione
+
+    -- Calcoliamo il totale aggiornato per l'ordine basato sulle righe appena inserite
+    SET total = (
+        SELECT SUM(prezzo)  -- Calcoliamo il totale sommando il prezzo per la `quantità` di ogni riga
+        FROM dettaglio_ordine
+        WHERE id_ordine = NEW.id_ordine  -- Filtriamo per l'id_ordine della nuova riga inserita
+    );
+
+    -- Aggiorniamo il totale dell'ordine nella tabella 'ordine'
+    UPDATE ordine
+    SET totale = total
+    WHERE id_ordine = NEW.id_ordine;  -- Utilizziamo l'id_ordine della nuova riga inserita
+END$$
+
+
+CREATE TRIGGER aggiorna_prezzo_ordine
+AFTER INSERT ON dettaglio_ordine
+FOR EACH ROW
+BEGIN
+    DECLARE total DECIMAL(10, 2);  -- Utilizzo di DECIMAL per il totale per maggiore precisione
+
+    -- Calcoliamo il totale aggiornato per l'ordine basato sulle righe appena inserite
+    SET total = (
+        SELECT SUM(prezzo)  -- Calcoliamo il totale sommando il prezzo per la `quantità` di ogni riga
+        FROM dettaglio_ordine
+        WHERE id_ordine = NEW.id_ordine  -- Filtriamo per l'id_ordine della nuova riga inserita
+    );
+
+    -- Aggiorniamo il totale dell'ordine nella tabella 'ordine'
+    UPDATE ordine
+    SET totale = total
+    WHERE id_ordine = NEW.id_ordine;  -- Utilizziamo l'id_ordine della nuova riga inserita
+END$$
+
+
+
+CREATE TRIGGER aggiorna_descrizione_ordine
+BEFORE DELETE ON prodotto
+FOR EACH ROW
+BEGIN
+    DECLARE descrizioni TEXT;
+
+    -- Concatenate descriptions with line breaks for all products in the orders that contain the product being deleted
+    SET descrizioni = (
+        SELECT GROUP_CONCAT(
+            CONCAT(
+                'Prodotto: ', p.nome, '\n',
+                '    Gusto: ', g.nomeGusto, '\n',
+                '    Confezione: ', c.peso, ' grammi\n',
+                '    `quantità`: ', d.`quantità`, '\n',
+                '    Prezzo: ', FORMAT(d.prezzo, 2), ' €'
+            ) SEPARATOR ';\n'
+        )
+        FROM dettaglio_ordine d
+        JOIN prodotto p ON p.id_prodotto = d.id_prodotto
+        JOIN variante v ON d.id_variante = v.id_variante
+        JOIN gusto g ON v.id_gusto = g.id_gusto
+        JOIN confezione c ON v.id_confezione = c.id_confezione
+        WHERE d.id_ordine IN (
+            SELECT id_ordine FROM dettaglio_ordine WHERE id_prodotto = OLD.id_prodotto
+        )
+    );
+
+    -- Update the descrizione field in the ordine table
+    UPDATE ordine o
+    SET o.descrizione = descrizioni
+    WHERE o.id_ordine IN (
+        SELECT id_ordine FROM dettaglio_ordine WHERE id_prodotto = OLD.id_prodotto
+    );
+END$$
+
+CREATE TRIGGER aggiornaQuantitaVariante
+AFTER INSERT ON dettaglio_ordine
+FOR EACH ROW
+BEGIN
+
+    DECLARE q INT;
+
+    -- Select the quantity of the new order detail row
+    SET q = NEW.`quantità`;
+
+    -- Update the variant quantity
+    UPDATE variante
+    SET `quantità` = `quantità` - q
+    WHERE id_variante = NEW.id_variante;
+END$$
+
+DELIMITER ;
+
+-- Indici sulla tabella prodotto
+CREATE INDEX idx_prodotto_categoria ON prodotto(categoria);
+CREATE INDEX idx_prodotto_nome ON prodotto(nome);
+
+-- Indici sulla tabella variante
+CREATE INDEX idx_variante_id_prodotto_variante ON variante(id_prodotto_variante);
+CREATE INDEX idx_variante_prezzo_sconto ON variante((prezzo * (1 - sconto / 100.0)));
+CREATE INDEX idx_variante_evidenza ON variante(evidenza);
+CREATE INDEX idx_variante_id_gusto ON variante(id_gusto);
+CREATE INDEX idx_variante_id_confezione ON variante(id_confezione);
+
+-- Indici sulla tabella gusto
+CREATE INDEX idx_gusto_nomeGusto ON gusto(nomeGusto);
+
+-- Indici sulla tabella confezione
+CREATE INDEX idx_confezione_peso ON confezione(peso);
+
+-- Indice combinato sulla tabella variante
+CREATE INDEX idx_variante_prezzo_sconto_evidenza ON variante((prezzo * (1 - sconto / 100.0)), evidenza);
+
+
+
+INSERT INTO Progetto_TSW_Dependability.utente (email, password, nome, cognome, codice_fiscale, data_di_nascita, indirizzo, numero_di_cellulare, poteri) VALUES ('raffaelecoppola603@gmail.com', '2645b14e38601e8675c430e5eccfb9bf5e5462bf', 'Raffaele', 'Coppola', 'CPPRFL03T28H703E', '2003-12-28', 'Via Giovanni Verga, 3', '3896630640', 1);
+
+
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('B001', 'Barretta proteica ', 'Una barretta proteica gourmet che offre il massimo in termini di sapore, consistenza e nutrizione. Ogni barretta è ricca di 20 g di proteine e a basso contenuto di zuccheri, rendendola perfetta per spuntini in movimento o come fonte di nutrimento extra tra i pasti.', 'barrette', 'Immagini/2_barrettaCioccCaramell.png', 361, 33, 32, 13);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('B002', 'Barretta croccante', 'Desideri uno snack dolce ad alto contenuto proteico e basso contenuto di zuccheri? È il tuo giorno fortunato. Questo dolce gourmet fa al caso tuo. Soia croccante proteica immersa in un cuore gloriosamente denso. Un’esperienza da non perdere.  Ovviamente, non serve dirti quanto è buono. È scontato. Vediamo allora un po’ di numeri. Ben 15 g di proteine e solo 2,2 g di zucchero in ogni barretta.', 'barrette', 'Immagini/barrettaCroccante.png', 333, 24, 32, 10);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('B003', 'Flapjack', 'Un delizioso flapjack ad alto contenuto proteico che offre il massimo in termini di sapore, consistenza e nutrizione. Ogni flapjack è ricco di proteine, il che lo rende perfetto per uno spuntino fuori casa o come fonte di nutrimento extra tra i pasti  I nostri Flapjack proteici sono un dolce da forno, ad alto contenuto proteico e ad alto contenuto di fibre. Ricchi di proteine e disponibili in una varietà di ottimi sapori, sono ottimi per raggiungere il tuo obiettivo proteico giornaliero senza dover ricorrere a zuccheri superflui. ', 'barrette', 'Immagini/2_flapJack.png', 379, 39, 25, 14);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('B004', 'Brownie proteico', 'Un delizioso brownie vegano ad alto contenuto proteico che offre un\'alimentazione di alta qualità con un sapore incredibile. Ogni brownie contiene ben 15 g di proteine, rendendolo ideale per spuntini fuori casa.  Realizzato con vero cioccolato, il nostro brownie proteico vegano è un dolce e morbido ad alto contenuto proteico. Ricchi di proteine e fonte di fibre, sono ottimi per raggiungere il tuo obiettivo proteico giornaliero senza dolcificanti artificiali.', 'barrette', 'Immagini/brownieProteico.png', 379, 41, 25, 12);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('B005', 'Barretta proteica alla frutta', 'Cerchi un po\' di bontà per soddisfare quelle voglie di dolce? Questo piccolo ma potente spuntino colpirà sicuramente nel segno.  Alto contenuto di proteine, alto contenuto di fibre e solo 187 kcal per barretta. Un flapjack divertente e fruttato che combina avena energizzante con pezzi di frutta secca. Questo classico flapjack cotto al forno per rimanere morbido vince su gusto e consistenza senza aumentare le calorie', 'barrette', 'Immagini/barrettaProteicaFrutta.png', 373, 43, 20, 11);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('B006', 'Barretta vegana gourmet', 'Una barretta proteica gourmet e vegana, che ti consente di fare la scelta sostenibile senza compromettere il sapore, la consistenza o l\'alimentazione. Ogni barretta è ricca di almeno 14 g di proteine vegetali e a basso contenuto di zuccheri, rendendola perfetta per spuntini in movimento o come fonte extra di nutrimento tra i pasti. Una soluzione vincente per raggiungere il tuo obiettivo proteico giornaliero senza consumare zuccheri inutili.', 'barrette', 'Immagini/barrettaVegana.png', 384, 31, 34, 16);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('CRE001', 'Burro di arachidi', 'Burro di arachidi naturale al 100%, di alta qualità, prodotto esclusivamente per bulk™. Fonte di proteine, pieno di sapore e perfetto per il bulking.  Il nostro burro di arachidi da 1 kg contiene tutto ciò che serve. Un burro ricco e naturale prodotto da arachidi intere tostate al 100% e nient\'altro. Senza aggiunta di sale, zucchero, olio di palma o conservanti ed è disponibile in varietà croccanti e lisce.', 'creme', 'Immagini/burroArachidi.png', 627, 12, 23, 51);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('CRE002', 'Burro di anacardi', 'Un burro di frutta a guscio come nessun altro. Creato esclusivamente per bulk™, il nostro burro di anacardi al caramello salato delizierà le tue papille gustative. Assapora il gusto dolce e salato. Celebra la consistenza liscia e cremosa. Un\'aggiunta coraggiosa alla nostra gamma di burro di frutta a guscio.  Creato con i migliori anacardi della categoria, la nostra crema spalmabile superiore è il partner perfetto per qualsiasi programma di aumento della massa. Hai voglia di aggiungere un po\' di indulgenza alla tua dieta? Allora ti meriti questa fonte di proteine deliziosamente liscia. Al cucchiaio, da spalmare o da mescolare. Come servirai la tua?', 'creme', 'Immagini/burroAnacardi.png', 567, 33, 17, 41);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('CRE003', 'Crema spalmabile proteica', 'Ti presentiamo le nostre creme spalmabili proteiche, l\'alternativa deliziosa, cremosa e senza zuccheri aggiunti al tuo normale toast topper da supermercato. Questi deliziosi spread si accumulano molto favorevolmente rispetto agli spread a cui sei abituato. Con zero olio di palma, almeno 19 g di proteine per 100 g e un\'enorme quantità di sapore, sono qui per cambiare il gioco della colazione.', 'creme', 'Immagini/cremaProteica.png', 508, 42, 19, 35);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('CRT001', 'Creatina monoidrato Compresse', 'Creatina monoidrato di alta qualità e ultra-pura, in una comoda forma in compresse, che fornisce ben 1000 mg di creatina monoidrato per compressa con una purezza del 99,99%. La  creatina è l’integratore sportivo attualmente più ricercato sul mercato e ha dimostrato di migliorare la performance nei circuiti di esercizi ad alta intensità e breve durata. Le nostre compresse di monoidrato di creatina offrono un’alternativa ai più comuni integratori di creatina in polvere, consentendo di ottenerne l’assunzione regolare in una forma facile da assumere.  La creatina monoidrato è un composto non essenziale che può essere ottenuto attraverso la dieta o sintetizzato nel fegato, nel pancreas e nei reni, ma non ai livelli richiesti per migliorare le riserve di creatina nel muscolo. Di conseguenza, è comune che gli atleti assumano integratori di creatina monoidrato. Prendendo 3 delle nostre compresse di creatina monoidrato ogni giorno, è possibile ottenere l’assunzione giornaliera di creatina ovunque ci si trovi e qualunque cosa si stia facendo.', 'creatina', 'Immagini/creatinaCompresse.png', 4, 1, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('CRT002', 'Creatina monoidrato', 'Il nostro integratore monoidrato di creatina di alta qualità ultra-pura, prodotta con purezza del 99,9%, disponibile in formule aromatizzate e non aromatizzato per una facile miscelazione.  La creatina è l’integratore sportivo attualmente più ricercato sul mercato, e ha dimostrato di aumentare la performance nei circuiti di esercizi ad alta intensità e breve durata*. È particolarmente popolare tra i bodybuilder, i sollevatori di pesi, i calciatori e i giocatori di rugby  La creatina monoidrato è un composto non essenziale che può essere ottenuto attraverso la dieta o sintetizzato nel fegato, nel pancreas e nei reni, ma non ai livelli richiesti per migliorare le riserve di creatina nel muscolo. Di conseguenza, è comune che gli atleti utilizzino integratori di creatina in polvere e in pillole. La nostra creatina monoidrato è ultra raffinata per una incredibile purezza del 99,9%, per offrirti solo pura nutrizione, affinché tu possa ottenere il massimo da ogni singolo allenamento.', 'creatina', 'Immagini/creatinaMonoidrato.png', 4, 1, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('CRT003', 'Creatina HCL', 'Creatina di alta qualità legata con un sale cloridrato per migliorarne l’assorbimento.  La creatina è l\'integratore sportivo attualmente più ricercato sul mercato e ha dimostrato di aumentare la performance nei circuiti di esercizi ad alta intensità e breve durata *. La nostra creatina HCL fornisce una forma di creatina legata con sale cloridrato, progettata per migliorare l\'assorbimento della creatina, fornendo 3.8 g di creatina cloridrato al 100% in una porzione da 3.8 g.  La creatina è un composto non essenziale che può essere ottenuto attraverso la dieta o sintetizzato nel fegato, nel pancreas e nei reni, ma non ai livelli richiesti per migliorare le riserve di creatina nel muscolo. Di conseguenza, è comune che gli atleti assumano la creatina attraverso un integratore. La creatina HCL è una scelta ideale per gli atleti che vogliono una creatina con assorbimento ottimale, quindi la rende una scelta perfetta per i bodybuilder seri, i sollevatori di pesi, i giocatori di rugby o chiunque si alleni con circuiti di esercizi ad alta intensità e breve durata.  *La Creatina migliora la performance nei circuiti di esercizi ad alta intensità e breve durata. L\'effetto benefico si ottiene con l’assunzione giornaliera di 3 g di creatina.', 'creatina', 'Immagini/creatinaHCL.png', 4, 1, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('CRT004', 'Creatina monoidrato Creapure®', '  La creatina monoidrato più pura sul mercato, da una fonte leader del settore, con purezza del 99,95% per un\'integrazione imbattibile per supportare il tuo allenamento.  La creatina è l\'integratore sportivo attualmente più ricercato sul mercato e ha dimostrato di aumentare la performance nei circuiti di esercizi ad alta intensità e breve durata*. La forma brevettata di creatina monoidrato di Creapure® fornisce la formula più pura attualmente sul mercato.  La creatina monoidrato è un composto non essenziale che può essere ottenuto attraverso la dieta o sintetizzato nel fegato, nel pancreas e nei reni, ma non ai livelli richiesti per migliorare le riserve di creatina nel muscolo. Di conseguenza, è comune che gli atleti prendano integratori di creatina in polvere o in pillole. Creapure® perfeziona la sua creatina con un processo brevettato, ottenendo la formula più pura possibile, priva di contaminanti che spesso compaiono in formule di qualità inferiore.', 'creatina', 'Immagini/creatinaCreapure.png', 4, 1, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('CRT005', 'Creatina monoidrato Creapure® (compresse)', ' Creatina monoidrato di alta qualità e ultra-pura, disponibile in comode compresse che forniscono 1000 mg di creatina monoidrato per compressa con una purezza del 99,99%. La creatina è l\'integratore sportivo più richiesto sul mercato e ha dimostrato di migliorare le performance in esercizi ad alta intensità e breve durata. Le nostre compresse di creatina monoidrato rappresentano un\'alternativa pratica ai tradizionali integratori di creatina in polvere, facilitando un\'assunzione regolare e conveniente.  La creatina monoidrato è un composto non essenziale che può essere assunto attraverso la dieta o sintetizzato nel fegato, nel pancreas e nei reni, ma non in quantità sufficienti a migliorare le riserve di creatina nei muscoli. Di conseguenza, è comune per gli atleti ricorrere agli integratori di creatina monoidrato. Assumendo 3 delle nostre compresse di creatina monoidrato al giorno, è possibile raggiungere la dose giornaliera raccomandata di creatina, indipendentemente da dove ci si trovi o cosa si stia facendo.', 'creatina', 'Immagini/creaPureCompresse.png', 4, 1, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('P001', 'Whey Protein Isolate', 'Questa polvere proteica di alta qualità è davvero performante. Vuoi vederla in azione? Mescolala a un frullato con bacche di stagione, aggiungila a porridge o pancake, cuocila nei brownie o diventa creativo aggiungendola a biscotti. Preferisci invece la semplicità? Basta aggiungere acqua o latte. Se stai cercando di aumentare l\'assunzione di proteine come parte di uno stile di vita sano ed equilibrato, le nostre proteine isolate del siero di latte pure non ti deluderanno.  E c\'è di più. È ora di scegliere un gusto. Non puoi sbagliare con i classici gusti vaniglia, cioccolato e fragola, o prova gli originali gusti fudge alla banana, caramello al cioccolato o gelato al pistacchio. Scegli tra oltre 15 varietà, tra cui la versione non aromatizzata.  Passiamo ora alle informazioni nutrizionali. Troverete almeno 24 g di proteine in una porzione da 30 g. Sono a basso contenuto di zuccheri (meno di 0,6 g per porzione) e a basso contenuto di grassi (meno di 0,4 g per porzione) e meno di 111 calorie per porzione.  Sei in cerca di ispirazione? Prova queste facili ricette di frullati ad alto contenuto proteico o ricette di cheesecake ad alto contenuto proteico. Non te ne pentirai!', 'proteine', 'Immagini/proteinWhey.png', 360, 5, 81, 1);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('P002', 'Caseina Micellare', 'Caseina micellare in polvere facile da miscelare, da una fonte di alta qualità e con un profilo amminoacidico impressionante. Questa polvere contiene un incredibile contenuto proteico di almeno l\'77%, disponibile in 3 deliziosi gusti o non aromatizzata, da poter combinare con la tua formula preferita.  La nostra caseina micellare è una caseina di alta qualità, realizzata con latte scremato ultra-filtrato. È l\'ideale se ti alleni seguendo una dieta priva di carne, se sei un atleta principiante o se ti alleni regolarmente, o se stai solo cercando alcune fonti alternative di proteine per integrare la tua dieta regolare.  La caseina micellare è una fonte proteica a lento rilascio, perfetta per la miscelazione con altri integratori proteici come le proteine del siero di latte e le proteine di pisello. È particolarmente popolare come integratore prima di andare a dormire, o per l\'uso durante il giorno, quando potresti non mangiare per un certo periodo di tempo.', 'proteine', 'Immagini/caseinaMicellare.png', 363, 3, 83, 2);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('P003', 'Pure Whey Protein', 'Sei pronto ad aumentare l\'apporto proteico come parte di uno stile di vita sano ed equilibrato? Le proteine del siero di latte pure sono stato create appositamente per te. E la nostra polvere proteica più venduta è molto più di un frullato. È ora di diventare creativi.   Mettiti il grembiule e aggiungile a biscotti fatti in casa, flapjack e brownie. Usale a colazione mescolandole in porridge o pancake. Mescolale a un frullato con frutta fresca, burro di noci e semi. O aggiungi semplicemente acqua o latte. Qualunque cosa tu scelga, sarà sicuramente un successo.   E le opzioni non si fermano qui. Le proteine del siero di latte pure sono disponibili in quasi 30 gusti, dai classici gusti vaniglia, cioccolato e fragola ai più avventurosi caramello salato, cioccolato alle arachidi e caffelatte con ghiaccio. Non fa per te? Scegli la versione non aromatizzata, e aggiungi alcune bacche per personalizzala. La scelta è tua.  Passiamo alle informazioni nutrizionali. Ogni porzione contiene almeno 22 g di proteine e 5 g di BCAA. Oltre ad essere a basso contenuto di zuccheri (meno di 1,5 g per porzione) e a basso contenuto di grassi (meno di 2,2 g per porzione), troverai meno di 117 calorie in ogni porzione (quasi l\'80% di queste derivano dalle proteine).', 'proteine', 'Immagini/pureWheyProtein.png', 387, 4, 77, 7);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('P004', 'Essential Whey Protein', 'Trovare una proteina del siero di latte che colpisce nel segno su costi, convenienza e qualità può essere una sfida. Quindi abbiamo creato Essential Whey Protein. Questa è un\'ottima scelta se stai cercando di aumentare l\'assunzione di proteine come parte di uno stile di vita sano ed equilibrato.  E i benefici non si fermano qui. Aggiungi uno scoop ai frullati con un cucchiaio del tuo burro di noci preferito. Mescolare nel porridge o mescolarlo in pancake. Realizza un capolavoro con muffin, brownie o flapjack fatti in casa. Mantienilo semplice e aggiungi solo acqua o latte. Le opzioni sono infinite.  Scegli tra i classici gusti Vaniglia, Cioccolato, Fragola o Banana, oppure osa essere diverso con i Biscotti al Caramello Salato o al Cioccolato.  Allora, cosa c\'è dentro? 12. Inquadra il letto e il microscopio. Tutto l\'essenziale di cui avete bisogno in un integratore alimentare semplice da usare. Con almeno 19 g di proteine, 9 g di aminoacidi essenziali (EAA), meno di 1,5 g di grassi e meno di 133 calorie per porzione, questa è una proteina del siero di latte europeo di alta qualità con un prezzo basso.  Cerchi ispirazione? Prova anche queste ricette Non ve ne pentirete! ', 'proteine', 'Immagini/essentialWheyProtein.png', 369, 26, 55, 4);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('P005', 'Proteine isolate di manzo 97 (HydroBEEF™)', 'Se stai cercando un\'alternativa alle proteine del siero di latte, o se stai seguendo una rigorosa dieta paleo, l’isolato di proteine bovine 97 (HydroBEEF™) è proprio quello che fa per te. Crea un frullato con burro di noci e semi, mescolalo nel porridge o aggiungilo semplicemente ad acqua o latte. Sei pronto a cucinare? Potenzia i tuoi brownie, biscotti o muffin fatti in casa.  E le opzioni non si fermano qui. Puoi scegliere tra i gusti cioccolato, cioccolato alle arachidi o banana fudge. Se ti piace semplice, scegli la versione non aromatizzata.  Ogni porzione contiene almeno 27 g di proteine e meno di 123 calorie. Le proteine del manzo sono inoltre a basso contenuto di zucchero (meno di 1 g per porzione) e a basso contenuto di grassi (meno di 0,9 g per porzione).  E poiché la qualità è sempre in cima alla nostra lista, questa formula di alta qualità è realizzata con HydroBEEF™ - una proteina completa e di alta qualità, con un impressionante contenuto proteico del 97%, proveniente da carne bovina fresca europea. Idrolizzata per renderla estremamente solubile, questa è una delle fonti proteiche più pure che troverai.', 'proteine', 'Immagini/manzoProtein.png', 407, 6, 90, 3);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('P006', 'Clear Whey All In One', 'È cristallino. Piacevolmente leggero. E pronto a ravvivarti. Una formula post-allenamento completa che colpisce nel segno a tutti i livelli. Questo multi-tasker non ti deluderà.  Un siero di latte trasparente con differenza. Ogni porzione fornisce 29 g di proteine del siero di latte europee, 17 g di carboidrati di alta qualità (Cluster Dextrin® e maltodestrina), 3 g di creatina monoidrato, 3 g di l-glutammina e 8 g di BCAA.  Contribuendo alla crescita e al mantenimento della massa muscolare*, al recupero** e alle prestazioni***, questo frullato all-in-one dà al tuo corpo ciò di cui ha bisogno durante il cruciale periodo post-allenamento. Facile da miscelare. Facile da bere. Come ci si aspetterebbe. Ogni sapore fruttato è destinato a stupire.', 'proteine', 'Immagini/clearWhey.png', 372, 34, 59, 1);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('P007', 'Clear Whey Isolate', 'I frullati densi e cremosi non sono per tutti, quindi abbiamo creato un\'alternativa leggera e rinfrescante al tuo frullato proteico quotidiano. Un modo divertente e gustoso per aggiungere proteine extra a uno stile di vita sano ed equilibrato.  Basta agitare con acqua o mescolare con agrumi o bacche in un frullato fresco. Prepara un mocktail, congela per raffreddare i ghiaccioli o scatenati con le caramelle gommose fatte in casa. Questo è molto più di un frullato.  Scegli il gusto più adatto al tuo umore. Il frutto della passione, il tè freddo alla pesca e la limonata rosa s', 'proteine', 'Immagini/clearIsolate.png', 343, 5, 80, 1);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('PSW001', 'Destrosio', '100% pura polvere di destrosio, ottima fonte di carboidrati a rapida digestione, perfetta aggiunta a qualsiasi formula post-allenamento o di recupero.  Il destrosio, noto anche come glucosio, è uno zucchero semplice che viene comunemente aggiunto alle bevande energetiche sportive. È una fonte di carboidrati ideale per i periodi post-allenamento e la nostra polvere di destrosio ti consente di aggiungerlo alla tua formula preferita o alla miscela di recupero fai-da-te.  Il destrosio è un monosaccaride derivato dall\'amido di mais. È chimicamente identico al glucosio, il che significa che il tuo corpo può saltare il processo di scomposizione da zuccheri più complessi e assorbirlo molto più rapidamente. È tipicamente usato come ingrediente nelle formule post-allenamento e di recupero, mescolato con proteine, creatina e BCAA. 2I carboidrati contribuiscono al recupero della normale funzione muscolare (contrazione) dopo un esercizio fisico ad alta intensità e/o di lunga durata che porti all\'affaticamento muscolare e all\'esaurimento delle riserve di glicogeno nei muscoli scheletrici. L’effetto benefico si ottiene con il consumo di carboidrati, provenienti da qualsiasi fonte, con un’assunzione totale di 4 g per kg di peso corporeo, secondo le dosi, entro le prime 4 ore e non oltre le 6 ore, a seguito di un esercizio fisico ad alta intensità e/o di lunga durata che porti all’affaticamento muscolare e all’esaurimento delle riserve di glicogeno nel muscolo scheletrico.', 'post-workout', 'Immagini/destrosio.png', 364, 91, 4, 1);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('PSW002', 'Maltodestrine', 'Maltodestrina pura al 100% senza additivi o riempitivi. Contiene 95 g di carboidrati per 100 g; un ingrediente perfetto per le formule di aumento di peso fai-da-te.  La maltodestrina è una fonte di carboidrati comunemente usata nelle formule dei frullati per l\'aumento di peso. La nostra maltodestrina è di alta qualità, senza additivi o riempitivi inutili, quindi puoi mescolarla con il tuo frullato preferito per aggiungere alcuni carboidrati in più o utilizzarla come parte della tua formula fai-da-te.  La maltodestrina è una forma di zucchero prodotta dall\'amido chiamato polisaccaride. Prende il nome dalla sua formazione da polimeri di destrosio di diverse lunghezze. A differenza del destrosio, non ha un sapore dolce. È un ottimo carboidrato da combinare con proteine del siero di latte, creatina e amminoacidi.', 'post-workout', 'Immagini/maltodestrina.png', 389, 95, 5, 5);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('PSW003', 'Aftermath Post-Workout Recovery', 'Il miglior integratore per il recupero post-allenamento * di bulk™, ricco di 40 g di proteine per porzione, ingredienti ad alte prestazioni brevettati e una gamma superiore di sostanze nutritive con totale trasparenza. Siamo così orgogliosi di questo, se non ti piace, ti restituiremo i tuoi soldi.**  Aftermath™ è creato in conformità con gli standard internazionali delle competizioni per atleti professionisti e allenatori d\'élite. Ogni lotto è testato in laboratorio in modo indipendente per sostanze e impurità vietate, inoltre scomponiamo ogni singolo ingrediente e la sua quantità per una totale trasparenza, in modo che gli atleti professionisti sappiano esattamente cosa stanno mettendo nel loro corpo.', 'post-workout', 'Immagini/postWorkout.png', 379, 31, 54, 2);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('PW001', 'Pre-workout completo ', 'Una versione concentrata e sovralimentata della nostra famosissima formula pre-allenamento, con un aumento dei livelli di beta alanina (3 g), citrullina malato (3 g), oltre all\'aggiunta di vitamina B6.  Come suggerisce il nome, la formula di pre-allenamento avanzata si basa sulla nostra originale formula pre-allenamento, aumentando i dosaggi degli ingredienti chiave, con l\'aggiunta di alcuni extra. Se stai cercando una spinta in più, questo è il pre-allenamento che fa per te.  Come la formula originale, la formula di pre-allenamento avanzata contiene 5 g di BCAA essenziali in un rapporto 3:1:1 di leucina, 3 g di AAKG e 400 mg di L-tirosina. Inoltre, abbiamo aumentato i livelli di altri ingredienti chiave e aggiunto un po’ di vitamina B6, che può contribuire a ridurre l\'affaticamento e la stanchezza.', 'pre-workout', 'Immagini/preWorkout.png', 50, 10, 1, 1);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('PW002', 'Pre-workout senza caffeina', 'Questa versione senza stimolanti del nostro popolare Complete Pre-Workout™ ti dà tutti i vantaggi per potenziare la tua sessione di allenamento senza assumere troppa caffeina. Con ben 13 g di principi attivi a porzione, tra cui 3 g di arginina alfa-chetogluarato (AAKG), 3 g di beta alanina, 3 g di creatina monoidrato e 3 g di citrullina malato.  La nostra bevanda Pre-Workout senza caffeina è stata sapientemente formulata per iniziare la sessione di allenamento senza stimolanti. Ogni porzione fornisce dosi ottimali dei nutrienti principali per supportarti nel tuo allenamento.  Abbiamo modificato la nostra formula Complete Pre-Workout™ rimuovendo qualsiasi stimolante e aggiungendo una serie di ingredienti alternativi pre-allenamento, oltre ad aumentare il dosaggio di diversi nutrienti principali. Ne è risultata una bevanda pre-allenamento ricca, senza stimolanti che ti prepara a spingere a ogni set.  * È stato dimostrato che la creatina aumenta le prestazioni fisiche in ripetizioni di esercizi brevi e ad alta intensità:  **La vitamina B6 contribuisce alla riduzione di stanchezza e affaticamento, oltre che al normale funzionamento psicologico.', 'pre-workout', 'Immagini/preWorkoutCaffeinFree.png', 70, 15, 2, 0);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('PW003', 'Elevate Pre-Workout', 'Il miglior integratore pre-allenamento di bulk™, contenente 11 ingredienti pre-allenamento potentemente dosati tra cui Vitargo® e BioPerine®, elencati in dettaglio, testati in laboratorio e approvati dagli atleti d\'élite. Se non ti piace, ti restituiremo i tuoi soldi *.  Abbiamo creato Elevate™ con un unico obiettivo: Crea il miglior pre-allenamento che il denaro possa comprare, senza esclusione di colpi. Ed è quello che abbiamo fatto. Ogni porzione è caricata con 11 incredibili principi attivi, dosati a livelli ottimali, con totale trasparenza in modo da sapere esattamente come stai alimentando il tuo corpo.  Elevate™ contiene una miscela ponderata di carboidrati, aminoacidi, integratori energetici, vitamine e termonutrienti di alta qualità, comprese formule esclusive e proprietarie, per darti la massima spinta pre-allenamento. In parole povere, è il miglior pre-allenamento per atleti professionisti e allenatori seri sul mercato.', 'pre-workout', 'Immagini/elevatePreWorkout.png', 120, 30, 5, 1);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('S001', 'Salsa BBQ ', 'C\'è un tempo e un luogo per le calorie. E questo non è uno di quelli. Le nostre salse ipocaloriche ti danno tutto ciò di cui hai bisogno da un condimento senza sprechi di energia. A basso contenuto di zuccheri. A basso contenuto calorico. Senza grassi. Aggiungi sapore al tuo cibo senza limiti.  Seduto in disparte, al centro della scena o in secondo piano. Queste salse salate non vedono l\'ora di piacere. Ravviva i barbecue estivi, mescola gli stufati invernali o semplicemente schiaccia i tuoi cibi preferiti. Prepara un pasto con le nostre salse ipocaloriche. ', 'salse', 'Immagini/salsaBBQ.png', 12, 3, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('S002', 'Salsa Chili', 'C\'è un tempo e un luogo per le calorie. E questo non è uno di quelli. Le nostre salse ipocaloriche ti danno tutto ciò di cui hai bisogno da un condimento senza sprechi di energia. A basso contenuto di zuccheri. A basso contenuto calorico. Senza grassi. Aggiungi sapore al tuo cibo senza limiti.  Seduto in disparte, al centro della scena o in secondo piano. Queste salse salate non vedono l\'ora di piacere. Ravviva i barbecue estivi, mescola gli stufati invernali o semplicemente schiaccia i tuoi cibi preferiti. Prepara un pasto con le nostre salse ipocaloriche', 'salse', 'Immagini/salsaChili.png', 4, 1, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('S003', 'Ketchup light', 'C\'è un tempo e un luogo per le calorie. E questo non è uno di quelli. Le nostre salse ipocaloriche ti danno tutto ciò di cui hai bisogno da un condimento senza sprechi di energia. A basso contenuto di zuccheri. A basso contenuto calorico. Senza grassi. Aggiungi sapore al tuo cibo senza limiti.  Seduto in disparte, al centro della scena o in secondo piano. Queste salse salate non vedono l\'ora di piacere. Ravviva i barbecue estivi, mescola gli stufati invernali o semplicemente schiaccia i tuoi cibi preferiti. Prepara un pasto con le nostre salse ipocaloriche. ', 'salse', 'Immagini/salsaKetchup.png', 0, 0, 0, 0);
+
+
+
+
+
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (13, 'Anacardi');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (12, 'Arachidi');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (3, 'Banana');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (19, 'Biscotti&crema');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (16, 'Caramello');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (7, 'Chili Dolce');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (1, 'Cioccolato');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (15, 'Cioccolato&Caramello');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (14, 'Cioccolato&Latte');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (5, 'Coca-Cola');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (4, 'Cookies');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (11, 'Frutti di bosco');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (8, 'Ketchup');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (9, 'Maionese');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (18, 'Melone');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (17, 'Mirtilli');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (2, 'Neutro');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (6, 'Smokey BBQ');
+INSERT INTO Progetto_TSW_Dependability.gusto (id_gusto, nomeGusto) VALUES (10, 'Tropical');
+
+
+
+INSERT INTO Progetto_TSW_Dependability.confezione (id_confezione, peso) VALUES (1, 100);
+INSERT INTO Progetto_TSW_Dependability.confezione (id_confezione, peso) VALUES (2, 250);
+INSERT INTO Progetto_TSW_Dependability.confezione (id_confezione, peso) VALUES (3, 500);
+INSERT INTO Progetto_TSW_Dependability.confezione (id_confezione, peso) VALUES (4, 1000);
+INSERT INTO Progetto_TSW_Dependability.confezione (id_confezione, peso) VALUES (5, 1500);
+INSERT INTO Progetto_TSW_Dependability.confezione (id_confezione, peso) VALUES (6, 2000);
+INSERT INTO Progetto_TSW_Dependability.confezione (id_confezione, peso) VALUES (7, 2500);
+
+
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (1, 'P001', 1, 4, 35, 138, 15, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (2, 'P002', 1, 5, 35, 99, 10, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (3, 'P003', 1, 6, 45, 100, 10, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (4, 'P004', 1, 4, 20, 197, 0, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (5, 'P005', 1, 7, 55, 120, 15, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (6, 'CRT001', 5, 3, 15, 250, 10, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (7, 'CRT002', 5, 4, 22, 150, 10, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (8, 'CRT003', 5, 3, 24.5, 110, 15, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (9, 'CRT004', 2, 3, 15, 115, 0, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (10, 'CRT005', 2, 5, 24, 210, 15, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (12, 'S001', 6, 2, 5.5, 170, 10, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (13, 'S002', 7, 2, 5.5, 200, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (17, 'PW001', 10, 4, 20, 150, 15, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (18, 'PW002', 11, 4, 12, 100, 5, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (19, 'PW003', 11, 5, 22.5, 70, 20, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (20, 'PSW001', 2, 7, 20, 55, 5, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (21, 'PSW002', 5, 7, 24, 50, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (22, 'PSW003', 1, 4, 28.5, 120, 10, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (23, 'P001', 1, 3, 27, 75, 5, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (24, 'P001', 1, 5, 45.99, 55, 10, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (25, 'CRE001', 12, 4, 9.99, 200, 15, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (28, 'CRE002', 13, 4, 9.99, 150, 20, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (29, 'CRE003', 14, 3, 7.99, 50, 15, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (30, 'B001', 15, 2, 8.99, 350, 10, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (31, 'B002', 16, 1, 5.99, 148, 20, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (32, 'B003', 1, 1, 5.99, 500, 15, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (33, 'B004', 1, 1, 6.99, 250, 10, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (34, 'B004', 12, 1, 4.99, 100, 20, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (35, 'B005', 11, 1, 5.99, 200, 15, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (36, 'S003', 8, 2, 6.99, 250, 10, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (37, 'P006', 5, 4, 27.5, 150, 10, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (38, 'P007', 11, 4, 32, 75, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (39, 'B006', 19, 2, 5.99, 125, 20, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (40, 'P001', 14, 3, 22, 45, 5, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (41, 'P001', 14, 4, 31, 45, 10, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (42, 'P002', 1, 4, 32.5, 40, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (43, 'P002', 1, 6, 42.5, 50, 15, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (44, 'P003', 1, 4, 30.5, 45, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (46, 'P003', 3, 4, 29.9, 100, 10, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (47, 'P003', 3, 5, 35.9, 45, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (48, 'P004', 1, 5, 24.5, 55, 15, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (49, 'P004', 1, 6, 40.99, 45, 5, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (50, 'P005', 1, 6, 40.5, 30, 5, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (51, 'P006', 5, 5, 30, 45, 5, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (52, 'P007', 10, 4, 30.99, 70, 10, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (53, 'CRT001', 2, 3, 12.5, 150, 10, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (54, 'CRT002', 2, 4, 20.5, 35, 15, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (55, 'CRT003', 2, 3, 25, 50, 5, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (56, 'CRT004', 5, 3, 17.5, 65, 15, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (57, 'CRT005', 2, 6, 29.99, 50, 20, 1);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (58, 'B001', 15, 3, 14.5, 50, 10, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (60, 'B002', 16, 2, 10, 150, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (61, 'B003', 1, 2, 9.99, 45, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (62, 'B004', 12, 2, 8.99, 45, 5, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (63, 'B005', 11, 2, 7.99, 50, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (64, 'B006', 19, 3, 12.5, 40, 15, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (65, 'CRE001', 12, 5, 15.5, 80, 10, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (66, 'CRE002', 13, 5, 13.5, 50, 5, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (67, 'CRE003', 19, 3, 8.5, 41, 5, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (68, 'PSW001', 2, 6, 19.99, 65, 5, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (69, 'PSW002', 2, 6, 23.5, 50, 10, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (70, 'PSW003', 1, 5, 29.99, 35, 7, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (71, 'PW001', 10, 5, 23.5, 30, 10, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (72, 'PW002', 11, 5, 17.5, 42, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (73, 'PW003', 11, 6, 29.99, 40, 5, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (82, 'P002', 3, 4, 22.5, 40, 0, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (83, 'P002', 3, 5, 28.5, 35, 10, 0);
+INSERT INTO Progetto_TSW_Dependability.variante (id_variante, id_prodotto_variante, id_gusto, id_confezione, prezzo, `quantità`, sconto, evidenza) VALUES (84, 'P006', 10, 4, 19.99, 55, 15, 1);
+
+
+INSERT INTO Progetto_TSW_Dependability.ordine (id_ordine, email_utente, data, stato, totale, descrizione) VALUES (1, 'raffaelecoppola603@gmail.com', '2024-07-17', 'in esecuzione', 209.25, null);
+INSERT INTO Progetto_TSW_Dependability.ordine (id_ordine, email_utente, data, stato, totale, descrizione) VALUES (2, 'raffaelecoppola603@gmail.com', '2024-07-18', 'in esecuzione', 123.75, null);
+INSERT INTO Progetto_TSW_Dependability.ordine (id_ordine, email_utente, data, stato, totale, descrizione) VALUES (3, 'raffaelecoppola603@gmail.com', '2024-07-18', 'in esecuzione', 424.46, null);
+INSERT INTO Progetto_TSW_Dependability.ordine (id_ordine, email_utente, data, stato, totale, descrizione) VALUES (4, 'raffaelecoppola603@gmail.com', '2024-07-18', 'in esecuzione', 135, null);
+INSERT INTO Progetto_TSW_Dependability.ordine (id_ordine, email_utente, data, stato, totale, descrizione) VALUES (5, 'raffaelecoppola603@gmail.com', '2024-07-19', 'in esecuzione', 105.4, null);
+
+
+
+INSERT INTO Progetto_TSW_Dependability.dettaglio_ordine (id_ordine, id_prodotto, id_variante, `quantità`, prezzo) VALUES (1, 'P002', 2, 4, 135);
+INSERT INTO Progetto_TSW_Dependability.dettaglio_ordine (id_ordine, id_prodotto, id_variante, `quantità`, prezzo) VALUES (1, 'S001', 12, 15, 74.25);
+INSERT INTO Progetto_TSW_Dependability.dettaglio_ordine (id_ordine, id_prodotto, id_variante, `quantità`, prezzo) VALUES (2, 'S001', 12, 25, 123.75);
+INSERT INTO Progetto_TSW_Dependability.dettaglio_ordine (id_ordine, id_prodotto, id_variante, `quantità`, prezzo) VALUES (3, 'P001', 1, 3, 89.25);
+INSERT INTO Progetto_TSW_Dependability.dettaglio_ordine (id_ordine, id_prodotto, id_variante, `quantità`, prezzo) VALUES (3, 'P001', 23, 5, 128.25);
+INSERT INTO Progetto_TSW_Dependability.dettaglio_ordine (id_ordine, id_prodotto, id_variante, `quantità`, prezzo) VALUES (3, 'P001', 24, 5, 206.96);
+INSERT INTO Progetto_TSW_Dependability.dettaglio_ordine (id_ordine, id_prodotto, id_variante, `quantità`, prezzo) VALUES (4, 'P002', 2, 4, 135);
+INSERT INTO Progetto_TSW_Dependability.dettaglio_ordine (id_ordine, id_prodotto, id_variante, `quantità`, prezzo) VALUES (5, 'CRE003', 67, 2, 16.15);
+INSERT INTO Progetto_TSW_Dependability.dettaglio_ordine (id_ordine, id_prodotto, id_variante, `quantità`, prezzo) VALUES (5, 'P001', 1, 3, 89.25);

@@ -1,0 +1,31 @@
+version: "3.8"
+
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456789
+      MYSQL_DATABASE: Progetto_TSW_Dependability
+      TZ: Europe/Rome
+#    ports:
+#      - "3306:3306"  opzionale: esponi solo se vuoi accedere da fuori Docker
+    volumes:
+      - dbdata:/var/lib/mysql
+      - ./DB/CodiceSQL:/docker-entrypoint-initdb.d/seed.sql:ro
+
+  web:
+    build: .
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: Progetto_TSW_Dependability
+      DB_USER: root
+      DB_PASS: 123456789
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  dbdata:
