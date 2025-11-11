@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/web-app_6_0.xsd"
+         version="6.0"
+            >
+    <error-page>
+        <error-code>500</error-code>
+        <location>/WEB-INF/results/errorServer.jsp</location>
+    </error-page>
+
+    <error-page>
+        <error-code>404</error-code>
+        <location>/WEB-INF/results/errorNotFound.jsp</location>
+    </error-page>
+
+    <error-page>
+        <exception-type>java.lang.Exception</exception-type>
+        <location>/WEB-INF/results/errorServer.jsp</location>
+    </error-page>
+
+    <!-- //esempio dichiarazione e mapping servlet
+    <servlet>
+        <servlet-name>ShowTasteServlet</servlet-name>
+        <servlet-class>controller.Filters.ShowTasteServlet</servlet-class>
+    </servlet>
+
+    <servlet-mapping>
+        <servlet-name>ShowTasteServlet</servlet-name>
+        <url-pattern>/showTastes</url-pattern>
+    </servlet-mapping>
+     -->
+
+    <session-config>
+        <session-timeout>30</session-timeout>
+    </session-config>
+</web-app>

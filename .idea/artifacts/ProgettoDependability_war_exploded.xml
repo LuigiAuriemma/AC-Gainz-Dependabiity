@@ -1,0 +1,24 @@
+<component name="ArtifactManager">
+  <artifact type="exploded-war" name="ProgettoDependability:war exploded">
+    <output-path>$PROJECT_DIR$/out/artifacts/ProgettoDependability_war_exploded</output-path>
+    <root id="root">
+      <element id="directory" name="WEB-INF">
+        <element id="directory" name="classes">
+          <element id="module-output" name="ProgettoTSW" />
+        </element>
+        <element id="directory" name="lib">
+          <element id="library" level="project" name="Maven: com.googlecode.json-simple:json-simple:1.1.1" />
+          <element id="library" level="project" name="Maven: junit:junit:4.10" />
+          <element id="library" level="project" name="Maven: org.hamcrest:hamcrest-core:1.1" />
+          <element id="library" level="project" name="Maven: mysql:mysql-connector-java:8.0.28" />
+          <element id="library" level="project" name="Maven: com.google.protobuf:protobuf-java:3.11.4" />
+          <element id="library" level="project" name="Maven: org.apache.tomcat:tomcat-jdbc:10.0.17" />
+          <element id="library" level="project" name="Maven: org.apache.tomcat:tomcat-juli:10.0.17" />
+          <element id="library" level="project" name="Maven: javax.servlet.jsp.jstl:jstl-api:1.2" />
+          <element id="library" level="project" name="Maven: org.glassfish.web:jstl-impl:1.2" />
+        </element>
+      </element>
+      <element id="javaee-facet-resources" facet="ProgettoTSW/web/Web" />
+    </root>
+  </artifact>
+</component>
