@@ -60,49 +60,80 @@ public class CarrelloServlet extends HttpServlet {
         //prende i dati del prodotto nel carrello dalla request
         String idProdotto = request.getParameter("id");
         String gusto = request.getParameter("gusto");
-        int pesoConfezione = Integer.parseInt(request.getParameter("pesoConfezione"));
+
+        int pesoConfezione;
+        try {
+            pesoConfezione = Integer.parseInt(request.getParameter("pesoConfezione"));
+        } catch (NumberFormatException e) {
+            // Parametro non valido, interrompi l'azione in modo sicuro
+            return;
+        }
 
         Prodotto p = prodottoDAO.doRetrieveById(idProdotto);
         if (p != null){
             VarianteDAO varianteDAO = new VarianteDAO();
-            Variante v = varianteDAO.doRetrieveVariantByFlavourAndWeight(p.getIdProdotto(), gusto, pesoConfezione).get(0);
+
+            // 1. Salva la lista restituita dal DAO
+            List<Variante> varianti = varianteDAO.doRetrieveVariantByFlavourAndWeight(p.getIdProdotto(), gusto, pesoConfezione);
+
+            // 2. Controlla se la lista è vuota PRIMA di accedere a .get(0)
+            if (varianti.isEmpty()) {
+                // La variante non esiste, gestisci l'errore.
+                return;
+            }
+            // 3. Solo ora puoi prendere la variante in sicurezza
+            Variante v = varianti.get(0);
+
             List<Carrello> cartItems = (List<Carrello>) session.getAttribute("cart");
             if (v != null && cartItems != null){
-                String quantity = request.getParameter("quantity");
-                //controlla che la quantita passata sia corretta e che sia inferiore alla quantita presente nel DB
-                if (quantity != null && !quantity.isBlank() && Integer.parseInt(quantity) < v.getQuantita()){
-                    int q = Integer.parseInt(quantity);
-                    //nel caso in cui non si rimuova il prodotto
-                    if (q < 0) {
-                        handleRemoveVariantAction(request, session, prodottoDAO, out);
+                String quantityStr = request.getParameter("quantity");
+
+                if (quantityStr != null && !quantityStr.isBlank()) {
+
+                    int q; // Variabile int sicura
+                    try {
+                        // Prova a parsare la stringa
+                        q = Integer.parseInt(quantityStr);
+                    } catch (NumberFormatException e) {
+                        // Se fallisce (es. "abc"), interrompi l'azione
+                        return;
                     }
-                    else {
-                        //aggiorna il prezzo in base alla nuova quantità contando ovviamente lo sconto
-                        float price = v.getPrezzo();
-                        if (v.getSconto() > 0){
-                            price = price * (1 - (float) v.getSconto() / 100);
-                            price = Math.round(price * 100.0f) / 100.0f;
+
+                    if (q <= v.getQuantita()){
+
+                        // Se la quantità è 0 o meno, considera l'azione come una rimozione
+                        if (q <= 0) {
+                            handleRemoveVariantAction(request, session, prodottoDAO, out);
                         }
-
-                        price *= q;
-
-                        //aggiorna il prodotto nel carrello con la nuova quantita e il nuovo prezzo
-                        for (Carrello c: cartItems){
-                            if (c.getIdVariante() == v.getIdVariante()){
-                                c.setQuantita(q);
-                                c.setPrezzo(price);
-                                break;
+                        else {
+                            //aggiorna il prezzo in base alla nuova quantità contando ovviamente lo sconto
+                            float price = v.getPrezzo();
+                            if (v.getSconto() > 0){
+                                price = price * (1 - (float) v.getSconto() / 100);
+                                price = Math.round(price * 100.0f) / 100.0f;
                             }
-                        }
 
-                        session.setAttribute("cart", cartItems);
-                        writeCartItemsToResponse(cartItems, prodottoDAO, out);
+                            price *= q;
+
+                            //aggiorna il prodotto nel carrello con la nuova quantita e il nuovo prezzo
+                            for (Carrello c: cartItems){
+                                if (c.getIdVariante() == v.getIdVariante()){
+                                    c.setQuantita(q);
+                                    c.setPrezzo(price);
+                                    break;
+                                }
+                            }
+
+                            session.setAttribute("cart", cartItems);
+                            writeCartItemsToResponse(cartItems, prodottoDAO, out);
+                        }
                     }
+                    // else: la quantità richiesta è maggiore dello stock disponibile.
+                    // Non facciamo nulla in modo sicuro (non aggiorniamo il carrello).
                 }
             }
         }
     }
-
 
 
 
@@ -111,13 +142,31 @@ public class CarrelloServlet extends HttpServlet {
         //prendo i dati del prodotto nel carrello passati dalla request
         String idToRemove = request.getParameter("id");
         String gusto = request.getParameter("gusto");
-        int pesoConfezione = Integer.parseInt(request.getParameter("pesoConfezione"));
+        int pesoConfezione;
+        try {
+            pesoConfezione = Integer.parseInt(request.getParameter("pesoConfezione"));
+        } catch (NumberFormatException e) {
+            // Parametro non valido, interrompi l'azione
+            return;
+        }
 
         Prodotto p = prodottoDAO.doRetrieveById(idToRemove);
 
         if (p != null){
             VarianteDAO varianteDAO = new VarianteDAO();
-            Variante v = varianteDAO.doRetrieveVariantByFlavourAndWeight(p.getIdProdotto(), gusto, pesoConfezione).get(0);
+
+            // 1. Salva la lista restituita dal DAO
+            List<Variante> varianti = varianteDAO.doRetrieveVariantByFlavourAndWeight(p.getIdProdotto(), gusto, pesoConfezione);
+
+            // 2. Controlla se la lista è vuota PRIMA di accedere a .get(0)
+            if (varianti.isEmpty()) {
+                // La variante non esiste, gestisci l'errore.
+                // L'opzione più sicura è interrompere l'esecuzione di questo metodo.
+                return;
+            }
+
+            // 3. Solo ora puoi prendere la variante in sicurezza
+            Variante v = varianti.get(0);
             if (v != null){
                 List<Carrello> cartItems = (List<Carrello>) session.getAttribute("cart");
 
@@ -145,20 +194,41 @@ public class CarrelloServlet extends HttpServlet {
 
             //setto la quantita desiderata dall'utente
             if (request.getParameter("quantity") != null) {
-                int x = Integer.parseInt(request.getParameter("quantity"));
-                if (x > 0) quantity = x;
+                try {
+                    int x = Integer.parseInt(request.getParameter("quantity"));
+                    if (x > 0) quantity = x;
+                } catch (NumberFormatException e) {
+                    // Se la quantità non è un numero, ignora l'input
+                    // e la quantità resta 1 (default). Non interrompiamo l'azione.
+                }
             }
 
 
             //prendo altri dati relativi al prodotto
             String gusto = request.getParameter("gusto");
-            String pesoConfezione = request.getParameter("pesoConfezione");
+            String pesoConfezioneStr = request.getParameter("pesoConfezione"); // Prendiamo la stringa
 
+            int pesoConfezione; // Variabile int sicura
+            try {
+                pesoConfezione = Integer.parseInt(pesoConfezioneStr);
+            } catch (NumberFormatException e) {
+                // Se il peso non è un numero, non possiamo trovare la variante.
+                // Interrompiamo l'azione in modo sicuro.
+                return;
+            }
 
 
             VarianteDAO varianteDAO = new VarianteDAO();
 
-            Variante v = varianteDAO.doRetrieveVariantByFlavourAndWeight(id, gusto, Integer.parseInt(pesoConfezione)).get(0);
+            // Usiamo la variabile 'int' sicura (pesoConfezione)
+            List<Variante> varianti = varianteDAO.doRetrieveVariantByFlavourAndWeight(p.getIdProdotto(), gusto, pesoConfezione);
+
+            // (Questa è la correzione per la Faglia 1 che hai già fatto, ottimo!)
+            if (varianti.isEmpty()) {
+                return;
+            }
+
+            Variante v = varianti.get(0);
 
             List<Carrello> cartItems = (List<Carrello>) session.getAttribute("cart");
             if (cartItems == null) cartItems = new ArrayList<>();
@@ -197,7 +267,7 @@ public class CarrelloServlet extends HttpServlet {
                     c.setQuantita(quantity);
                     c.setPrezzo(price * quantity);
                     c.setGusto(gusto);
-                    c.setPesoConfezione(Integer.parseInt(pesoConfezione));
+                    c.setPesoConfezione(pesoConfezione);
                     c.setImmagineProdotto(p.getImmagine());
                     cartItems.add(c);
                 }
@@ -220,12 +290,21 @@ public class CarrelloServlet extends HttpServlet {
 
         for (Carrello item: cartItems){
             Prodotto p = prodottoDAO.doRetrieveById(item.getIdProdotto());
+
+            // --- CORREZIONE FAGLIA ---
+            // Se il prodotto non esiste più nel DB, non mandarlo nel JSON.
+            // In questo modo evitiamo il NullPointerException.
+            if (p == null) {
+                continue; // Salta questo item e passa al prossimo
+            }
+            // --- FINE CORREZIONE ---
+
             JSONObject jsonObject = new JSONObject();
             //crea l'oggetto JSON con tutti i valori del prodotto
             jsonObject.put("idProdotto", item.getIdProdotto());
             jsonObject.put("idVariante", item.getIdVariante());
-            jsonObject.put("nomeProdotto", p.getNome());
-            jsonObject.put("imgSrc", p.getImmagine());
+            jsonObject.put("nomeProdotto", p.getNome()); // Ora 'p' è sicuro
+            jsonObject.put("imgSrc", p.getImmagine());   // Ora 'p' è sicuro
             jsonObject.put("flavour", item.getGusto());
             jsonObject.put("weight", item.getPesoConfezione());
             jsonObject.put("quantity", item.getQuantita());
