@@ -1,5 +1,6 @@
 package model;
 
+//@nullable_by_default
 public class DettaglioOrdine {
     /*@
     @   public invariant
@@ -9,20 +10,27 @@ public class DettaglioOrdine {
     @   prezzo >= 0 &&
     @   pesoConfezione >= 0;
     @ */
-
+    //@ spec_public
     private int idOrdine;
+    //@ spec_public
     private String idProdotto;
+    //@ spec_public
     private int idVariante;
+    //@ spec_public
     private int quantita;
+    //@ spec_public
     private float prezzo;
-
+    //@ spec_public
     private String gusto;
+    //@ spec_public
     private int pesoConfezione;
-
+    //@ spec_public
     private String immagineProdotto;
+    //@ spec_public
     private String nomeProdotto;
 
-    //@public pure;
+
+    //@ pure
     public String getImmagineProdotto() {
         return immagineProdotto;
     }
@@ -36,7 +44,7 @@ public class DettaglioOrdine {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getNomeProdotto() {
         return nomeProdotto;
     }
@@ -50,7 +58,7 @@ public class DettaglioOrdine {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getGusto() {
         return gusto;
     }
@@ -64,7 +72,7 @@ public class DettaglioOrdine {
     }
 
 
-    //@public pure;
+    //@ pure
     public int getPesoConfezione() {
         return pesoConfezione;
     }
@@ -78,7 +86,7 @@ public class DettaglioOrdine {
     }
 
 
-    //@public pure;
+    //@ pure
     public int getIdVariante() {
         return idVariante;
     }
@@ -92,7 +100,7 @@ public class DettaglioOrdine {
     }
 
 
-    //@public pure;
+    //@ pure
     public int getIdOrdine() {
         return idOrdine;
     }
@@ -106,7 +114,7 @@ public class DettaglioOrdine {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getIdProdotto() {
         return idProdotto;
     }
@@ -120,7 +128,7 @@ public class DettaglioOrdine {
     }
 
 
-    //@public pure;
+    //@ pure
     public int getQuantita() {
         return quantita;
     }
@@ -134,7 +142,7 @@ public class DettaglioOrdine {
     }
 
 
-    //@public pure;
+    //@ pure
     public float getPrezzo() {
         return prezzo;
     }

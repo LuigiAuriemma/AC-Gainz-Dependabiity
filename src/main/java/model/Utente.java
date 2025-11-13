@@ -6,20 +6,30 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 
+//@ nullable_by_default
 public class Utente {
-    private String email;
-    private String password;
-    private String nome;
-    private String cognome;
-    private String codiceFiscale;
-    private Date dataNascita;
 
+    //@ spec_public
+    private String email;
+    //@ spec_public
+    private String password;
+    //@ spec_public
+    private String nome;
+    //@ spec_public
+    private String cognome;
+    //@ spec_public
+    private String codiceFiscale;
+    //@ spec_public
+    private Date dataNascita;
+    //@ spec_public
     private String indirizzo;
+    //@ spec_public
     private String telefono;
+    //@ spec_public
     private boolean poteri;
 
 
-    //@public pure;
+    //@ pure
     public String getEmail() {
         return email;
     }
@@ -33,7 +43,7 @@ public class Utente {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getPassword() {
         return password;
     }
@@ -58,7 +68,7 @@ public class Utente {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getNome() {
         return nome;
     }
@@ -72,7 +82,7 @@ public class Utente {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getCognome() {
         return cognome;
     }
@@ -86,7 +96,7 @@ public class Utente {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getCodiceFiscale() {
         return codiceFiscale;
     }
@@ -100,7 +110,7 @@ public class Utente {
     }
 
 
-    //@public pure;
+    //@ pure
     public Date getDataNascita() {
         return dataNascita;
     }
@@ -114,7 +124,7 @@ public class Utente {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getIndirizzo() {
         return indirizzo;
     }
@@ -128,7 +138,7 @@ public class Utente {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getTelefono() {
         return telefono;
     }
@@ -142,7 +152,7 @@ public class Utente {
     }
 
 
-    //@public pure;
+    //@ pure
     public boolean getPoteri() {
         return poteri;
     }

@@ -1,5 +1,6 @@
 package model;
 
+//@ nullable_by_default
 public class Variante {
     /*@
     @   public invariant
@@ -11,19 +12,30 @@ public class Variante {
     @   prezzo >= 0 &&
     @   sconto >= 0;
     @*/
+
+    //@ spec_public
     private int idVariante;
+    //@ spec_public
     private String idProdotto;
+    //@ spec_public
     private int idGusto;
+    //@ spec_public
     private String gusto;
+    //@ spec_public
     private int idConfezione;
+    //@ spec_public
     private int pesoConfezione;
+    //@ spec_public
     private int quantita; //Quantità disponibile
+    //@ spec_public
     private float prezzo;
+    //@ spec_public
     private int sconto;
+    //@ spec_public
     private boolean evidenza;
 
 
-    //@public pure;
+    //@ pure
     public String getGusto() {
         return gusto;
     }
@@ -37,7 +49,7 @@ public class Variante {
     }
 
 
-    //@public pure;
+    //@ pure
     public int getPesoConfezione() {
         return pesoConfezione;
     }
@@ -51,7 +63,7 @@ public class Variante {
     }
 
 
-    //@public pure;
+    //@ pure
     public int getIdVariante() {
         return idVariante;
     }
@@ -65,7 +77,7 @@ public class Variante {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getIdProdotto() {
         return idProdotto;
     }
@@ -79,7 +91,7 @@ public class Variante {
     }
 
 
-    //@public pure;
+    //@ pure
     public int getIdGusto() {
         return idGusto;
     }
@@ -93,7 +105,7 @@ public class Variante {
     }
 
 
-    //@public pure;
+    //@ pure
     public int getIdConfezione() {
         return idConfezione;
     }
@@ -107,7 +119,7 @@ public class Variante {
     }
 
 
-    //@public pure;
+    //@ pure
     public int getQuantita() {
         return quantita;
     }
@@ -121,7 +133,7 @@ public class Variante {
     }
 
 
-    //@public pure;
+    //@ pure
     public float getPrezzo() {
         return prezzo;
     }
@@ -135,7 +147,7 @@ public class Variante {
     }
 
 
-    //@public pure;
+    //@ pure
     public int getSconto() {
         return sconto;
     }
@@ -149,7 +161,7 @@ public class Variante {
     }
 
 
-    //@public pure;
+    //@ pure
     public boolean isEvidenza() {
         return evidenza;
     }

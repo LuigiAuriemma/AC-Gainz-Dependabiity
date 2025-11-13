@@ -4,6 +4,7 @@ package model;
 import java.util.ArrayList;
 import java.util.List;
 
+//@ nullable_by_default
 public class Prodotto {
     /*@
     @   public invariant
@@ -12,15 +13,23 @@ public class Prodotto {
     @   proteine >= 0 &&
     @   grassi >= 0;
     @*/
+    //@ spec_public
     private String idProdotto;
+    //@ spec_public
     private String nome;
+    //@ spec_public
     private String descrizione;
+    //@ spec_public
     private String categoria;
-
+    //@ spec_public
     private String immagine;
+    //@ spec_public
     private int calorie;
+    //@ spec_public
     private int carboidrati;
+    //@ spec_public
     private int proteine;
+    //@ spec_public
     private int grassi;
 
     private List<Variante> varianti;
@@ -46,13 +55,17 @@ public class Prodotto {
 
         return varianti;
     }
-
+    /*@
+    @   requires varianti != null;
+    @   assignable this.varianti;
+    @   ensures this.varianti == varianti;
+    @*/
     public void setVarianti(List<Variante> varianti) {
         this.varianti = varianti;
     }
 
 
-    //@public pure;
+    //@ pure
     public String getIdProdotto() {
         return idProdotto;
     }
@@ -66,7 +79,7 @@ public class Prodotto {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getNome() {
         return nome;
     }
@@ -80,7 +93,7 @@ public class Prodotto {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getDescrizione() {
         return descrizione;
     }
@@ -94,7 +107,7 @@ public class Prodotto {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getCategoria() {
         return categoria;
     }
@@ -108,7 +121,7 @@ public class Prodotto {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getImmagine() {
         return immagine;
     }
@@ -122,7 +135,7 @@ public class Prodotto {
     }
 
 
-    //@public pure;
+    //@ pure
     public int getCalorie() {
         return calorie;
     }
@@ -136,7 +149,7 @@ public class Prodotto {
     }
 
 
-    //@public pure;
+    //@ pure
     public int getCarboidrati() {
         return carboidrati;
     }
@@ -150,7 +163,7 @@ public class Prodotto {
     }
 
 
-    //@public pure;
+    //@ pure
     public int getProteine() {
         return proteine;
     }
@@ -164,7 +177,7 @@ public class Prodotto {
     }
 
 
-    //@public pure;
+    //@ pure
     public int getGrassi() {
         return grassi;
     }

@@ -6,10 +6,12 @@ public class Confezione {
     @   idConfezione >= 0 &&
     @   peso >= 0;
     @*/
+    //@ spec_public
     private int idConfezione;
+    //@ spec_public
     private int peso;
 
-    //@ public pure;
+    //@ pure
     public int getIdConfezione() {
         return idConfezione;
     }
@@ -23,7 +25,7 @@ public class Confezione {
     }
 
 
-    //@ public pure;
+    //@ pure
     public int getPeso() {
         return peso;
     }

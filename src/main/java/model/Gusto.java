@@ -1,15 +1,18 @@
 package model;
 
+
 public class Gusto {
     /*@
     @   public invariant
     @   idGusto >= 0;
     @*/
+    //@ spec_public
     private int idGusto;
+    //@ spec_public nullable
     private String nomeGusto;
 
 
-    //@public pure;
+    //@ pure
     public int getIdGusto() {
         return idGusto;
     }
@@ -23,12 +26,12 @@ public class Gusto {
     }
 
 
-    //@public pure;
+    //@ pure nullable
     public String getNomeGusto() {
         return nomeGusto;
     }
     /*@
-    @   requires this.nomeGusto != null;
+    @   requires nomeGusto != null;
     @   assignable this.nomeGusto;
     @   ensures this.nomeGusto.equals(nomeGusto);
     @*/

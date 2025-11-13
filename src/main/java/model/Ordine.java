@@ -2,22 +2,28 @@ package model;
 
 import java.util.Date;
 
+//@ nullable_by_default
 public class Ordine {
     /*@
     @   public invariant
     @   idOrdine >= 0;
     @   totale >= 0;
     @*/
+    //@ spec_public
     private String emailUtente;
+    //@ spec_public
     private int idOrdine;
+    //@ spec_public
     private String stato;
+    //@ spec_public
     private float totale;
+    //@ spec_public
     private Date dataOrdine;
-
+    //@ spec_public
     private String descrizione;
 
 
-    //@public pure;
+    //@ pure
     public String getDescrizione() {
         return descrizione;
     }
@@ -31,7 +37,7 @@ public class Ordine {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getEmailUtente() {
         return emailUtente;
     }
@@ -45,7 +51,7 @@ public class Ordine {
     }
 
 
-    //@public pure;
+    //@ pure
     public int getIdOrdine() {
         return idOrdine;
     }
@@ -59,7 +65,7 @@ public class Ordine {
     }
 
 
-    //@public pure;
+    //@ pure
     public String getStato() {
         return stato;
     }
@@ -73,7 +79,7 @@ public class Ordine {
     }
 
 
-    //@public pure;
+    //@ pure
     public float getTotale() {
         return totale;
     }
@@ -87,7 +93,7 @@ public class Ordine {
     }
 
 
-    //@public pure;
+    //@ pure
     public Date getDataOrdine() {
         return dataOrdine;
     }
