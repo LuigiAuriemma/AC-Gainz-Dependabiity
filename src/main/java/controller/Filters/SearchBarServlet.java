@@ -65,14 +65,16 @@ public class SearchBarServlet extends HttpServlet {
             addToJson(products, session, req, resp);
         }
     }
-
     private void addToJson(List<Prodotto> products, HttpSession session, HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
         JSONArray jsonArray = new JSONArray();
 
-        //prendiamo la lista di prodotti e li insieriamo in un JSONArray
+        //prendiamo la lista di prodotti e li inseriamo in un JSONArray
         for (Prodotto p: products) {
             JSONObject jsonObject = getJsonObject(p);
-            jsonArray.add(jsonObject);
+
+            if (jsonObject != null) {
+                jsonArray.add(jsonObject);
+            }
         }
 
         response.setContentType("application/json");

@@ -25,7 +25,7 @@ public class CategoriesServlet extends HttpServlet {
         List<Prodotto> productsByCriteria = new ArrayList<>();
 
         //In base alla categoria prendo,tramite metodo DAO,tutte le tuple che soddisfano tale categoria
-        if(filter.equals("tutto")){
+        if("tutto".equals(filter)){
             productsByCriteria = prodottoDAO.doRetrieveAll();
         }else {
             productsByCriteria = prodottoDAO.doRetrieveByCriteria("categoria", filter);

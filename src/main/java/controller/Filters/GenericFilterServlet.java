@@ -97,7 +97,12 @@ public class GenericFilterServlet extends HttpServlet {
 
         for (Prodotto p : resultProducts) {
             JSONObject jsonObject = getJsonObject(p);
-            jsonArray.add(jsonObject);
+
+            // Se getJsonObject ha restituito null (perché il prodotto
+            // non ha varianti), salta l'aggiunta all'array.
+            if (jsonObject != null) {
+                jsonArray.add(jsonObject);
+            }
         }
 
         out.println(jsonArray);
@@ -107,6 +112,15 @@ public class GenericFilterServlet extends HttpServlet {
 
     //metodo che serve per creare un oggetto JSON del prodotto scelto
     public static JSONObject getJsonObject(Prodotto p) {
+
+        // 1. Controlla se la lista di varianti è valida
+        List<Variante> varianti = p.getVarianti();
+        if (varianti == null || varianti.isEmpty()) {
+            // Se non ci sono varianti, non possiamo creare un JSON valido
+            // per questo prodotto. Restituisci null.
+            return null;
+        }
+
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("id", p.getIdProdotto());
         jsonObject.put("nome", p.getNome());
@@ -114,7 +128,8 @@ public class GenericFilterServlet extends HttpServlet {
         jsonObject.put("calorie", p.getCalorie());
         jsonObject.put("immagine", p.getImmagine());
 
-        Variante variante = p.getVarianti().get(0);
+        // 2. Ora la chiamata a .get(0) è sicura
+        Variante variante = varianti.get(0);
         jsonObject.put("idVariante", variante.getIdVariante());
         if (variante.getSconto() > 0){
             jsonObject.put("sconto", variante.getSconto());

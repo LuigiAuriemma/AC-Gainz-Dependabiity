@@ -35,6 +35,10 @@ public class ShowTasteServlet extends HttpServlet {
         // Raccogliere tutte le varianti dei prodotti filtrati in una singola query
         List<Variante> varianti = varianteDAO.doRetrieveVariantiByProdotti(originalProducts);
 
+        if (varianti == null) {
+            varianti = new ArrayList<>();
+        }
+
         // Contare le occorrenze di ciascun gusto
         for (Variante v : varianti) {
             String gusto = v.getGusto();
