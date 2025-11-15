@@ -17,6 +17,11 @@ public class showTableServlet extends HttpServlet {
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         String tableName = req.getParameter("tableName");
 
+        if (tableName == null || tableName.isEmpty()) {
+            // Opzione A: Reindirizza alla home dell'admin
+            resp.sendRedirect("admin");
+            return;
+        }
         showTable(tableName, req, resp);
     }
 

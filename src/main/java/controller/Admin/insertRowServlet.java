@@ -34,6 +34,11 @@ public class insertRowServlet extends HttpServlet {
         String nameTable = req.getParameter("nameTable");
         System.out.println(nameTable);
 
+        if (nameTable == null || nameTable.isBlank()) {
+            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parametro 'nameTable' mancante.");
+            return; // Interrompe l'esecuzione del metodo
+        }
+
         boolean success = false;
 
         //in base a quale tabella viene scelta viene chiamato un metodo
@@ -132,6 +137,11 @@ public class insertRowServlet extends HttpServlet {
         String categoria = req.getParameter("categoria");
         Part filePart = req.getPart("immagine");
 
+        if (filePart == null || filePart.getSize() == 0 || filePart.getSubmittedFileName() == null || filePart.getSubmittedFileName().isBlank()) {
+            // Se il file non è stato inviato o è vuoto, non possiamo inserire il prodotto
+            return false;
+        }
+
         //Per l'immagine
         String fileName = Paths.get(filePart.getSubmittedFileName()).getFileName().toString();
         String destinazione = CARTELLA_UPLOAD + "/" + fileName;
@@ -152,20 +162,26 @@ public class insertRowServlet extends HttpServlet {
         String grassi = req.getParameter("grassi");
 
         if (isValid(List.of(idProdotto, nome, descrizione, categoria, calorie, carboidrati, proteine, grassi))) {
-            Prodotto p = new Prodotto();
-            p.setIdProdotto(idProdotto);
-            p.setNome(nome);
-            p.setDescrizione(descrizione);
-            p.setCategoria(categoria);
-            p.setImmagine(destinazione);
-            p.setCalorie(Integer.parseInt(calorie));
-            p.setCarboidrati(Integer.parseInt(carboidrati));
-            p.setProteine(Integer.parseInt(proteine));
-            p.setGrassi(Integer.parseInt(grassi));
+            try {
+                Prodotto p = new Prodotto();
+                p.setIdProdotto(idProdotto);
+                p.setNome(nome);
+                p.setDescrizione(descrizione);
+                p.setCategoria(categoria);
+                p.setImmagine(destinazione);
+                p.setCalorie(Integer.parseInt(calorie));
+                p.setCarboidrati(Integer.parseInt(carboidrati));
+                p.setProteine(Integer.parseInt(proteine));
+                p.setGrassi(Integer.parseInt(grassi));
 
-            ProdottoDAO prodottoDAO = new ProdottoDAO();
-            prodottoDAO.doSave(p);
-            return true;
+                ProdottoDAO prodottoDAO = new ProdottoDAO();
+                prodottoDAO.doSave(p);
+                return true;
+            } catch (NumberFormatException e) {
+                // Se un parametro non è un numero, cattura l'errore
+                e.printStackTrace(); // Logga l'errore per il debug
+                return false; // Restituisce 'false' per far scattare l'errore 500
+            }
         }
         return false;
     }
@@ -184,26 +200,36 @@ public class insertRowServlet extends HttpServlet {
         String evidenza = req.getParameter("evidenza");
 
         if (isValid(List.of(idProdottoVariante, idGusto, idConfezione, prezzo, quantity, sconto))) {
-            float price = Float.parseFloat(prezzo);
-            int q = Integer.parseInt(quantity);
-            int discount = Integer.parseInt(sconto);
-            boolean evidence = false;
-            if (evidenza != null && !evidenza.isEmpty()) {
-                evidence = Integer.parseInt(evidenza) == 1;
-            }
-            if (price > 0 && q > 0 && discount >= 0 && discount <= 100) {
-                Variante v = new Variante();
-                v.setIdProdotto(idProdottoVariante);
-                v.setIdGusto(Integer.parseInt(idGusto));
-                v.setIdConfezione(Integer.parseInt(idConfezione));
-                v.setPrezzo(price);
-                v.setQuantita(q);
-                v.setSconto(discount);
-                v.setEvidenza(evidence);
 
-                VarianteDAO varianteDAO = new VarianteDAO();
-                varianteDAO.doSaveVariante(v);
-                return true;
+            try {
+                float price = Float.parseFloat(prezzo);
+                int q = Integer.parseInt(quantity);
+                int discount = Integer.parseInt(sconto);
+                boolean evidence = false;
+                if (evidenza != null && !evidenza.isEmpty()) {
+                    evidence = Integer.parseInt(evidenza) == 1;
+                }
+
+                if (price <= 0 || q <= 0 || discount < 0 || discount > 100) {
+                    return false; // Dati non validi (es. prezzo negativo)
+                }
+                    Variante v = new Variante();
+                    v.setIdProdotto(idProdottoVariante);
+                    v.setIdGusto(Integer.parseInt(idGusto));
+                    v.setIdConfezione(Integer.parseInt(idConfezione));
+                    v.setPrezzo(price);
+                    v.setQuantita(q);
+                    v.setSconto(discount);
+                    v.setEvidenza(evidence);
+
+                    VarianteDAO varianteDAO = new VarianteDAO();
+                    varianteDAO.doSaveVariante(v);
+                    return true;
+
+            } catch (NumberFormatException e) {
+                // Se un parametro non è un numero, cattura l'errore
+                e.printStackTrace();
+                return false; // Restituisce 'false' per far scattare l'errore 500
             }
         }
         return false;
@@ -257,19 +283,26 @@ public class insertRowServlet extends HttpServlet {
         String quantity = req.getParameter("quantity");
 
         if (isValid(List.of(idOrdine, idProdotto, idVariante, quantity))) {
-            int q = Integer.parseInt(quantity);
+            try {
+                int q = Integer.parseInt(quantity);
 
-            if (q > 0) {
-                DettaglioOrdine dettaglioOrdine = new DettaglioOrdine();
-                dettaglioOrdine.setIdOrdine(Integer.parseInt(idOrdine));
-                dettaglioOrdine.setIdProdotto(idProdotto);
-                dettaglioOrdine.setIdVariante(Integer.parseInt(idVariante));
-                dettaglioOrdine.setQuantita(q);
+                if (q > 0) {
+                    DettaglioOrdine dettaglioOrdine = new DettaglioOrdine();
+                    dettaglioOrdine.setIdOrdine(Integer.parseInt(idOrdine));
+                    dettaglioOrdine.setIdProdotto(idProdotto);
+                    dettaglioOrdine.setIdVariante(Integer.parseInt(idVariante));
+                    dettaglioOrdine.setQuantita(q);
 
-                DettaglioOrdineDAO dettaglioOrdineDAO = new DettaglioOrdineDAO();
-                dettaglioOrdineDAO.doSave(dettaglioOrdine);
-                return true;
+                    DettaglioOrdineDAO dettaglioOrdineDAO = new DettaglioOrdineDAO();
+                    dettaglioOrdineDAO.doSave(dettaglioOrdine);
+                    return true;
+                }
+            } catch (NumberFormatException e) {
+                // Se un parametro non è un numero, cattura l'errore
+                e.printStackTrace(); // Logga l'errore per il debug
+                return false; // Restituisce 'false' per far scattare l'errore 500
             }
+
         }
         return false;
     }
@@ -297,16 +330,23 @@ public class insertRowServlet extends HttpServlet {
     //crea un oggetto Confezione avente quei parametri e poi tramite il DAO
     //salva la nuova Confezione nel database tramite metodo DAO
     private boolean insertConfezione(HttpServletRequest req) {
-        String peso = req.getParameter("pesoConfezione");
+        try {
+            String peso = req.getParameter("pesoConfezione");
 
-        if (peso != null && Integer.parseInt(peso) > 0) {
-            Confezione confezione = new Confezione();
-            confezione.setPeso(Integer.parseInt(peso));
+            if (peso != null && Integer.parseInt(peso) > 0) {
+                Confezione confezione = new Confezione();
+                confezione.setPeso(Integer.parseInt(peso));
 
-            ConfezioneDAO confezioneDAO = new ConfezioneDAO();
-            confezioneDAO.doSaveConfezione(confezione);
-            return true;
+                ConfezioneDAO confezioneDAO = new ConfezioneDAO();
+                confezioneDAO.doSaveConfezione(confezione);
+                return true;
+            }
+        } catch (NumberFormatException e) {
+            // Se un parametro non è un numero, cattura l'errore
+            e.printStackTrace(); // Logga l'errore per il debug
+            return false; // Restituisce 'false' per far scattare l'errore 500
         }
+
         return false;
     }
 }

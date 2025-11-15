@@ -52,21 +52,34 @@ public class showRowForm extends HttpServlet {
 
     //Prende la Confezione dal DB tramite la primaryKey e la aggiunge ad un JSONARRAY
     private void showConfezioneRowTable(String primaryKey, JSONArray jsonArray) {
-        ConfezioneDAO confezioneDAO = new ConfezioneDAO();
-        int idConfezione = Integer.parseInt(primaryKey);
-        Confezione confezione = confezioneDAO.doRetrieveById(idConfezione);
-        if (confezione != null) {
-            jsonArray.add(confezioneHelper(confezione));
+        try {
+            ConfezioneDAO confezioneDAO = new ConfezioneDAO();
+            int idConfezione = Integer.parseInt(primaryKey);
+            Confezione confezione = confezioneDAO.doRetrieveById(idConfezione);
+            if (confezione != null) {
+                jsonArray.add(confezioneHelper(confezione));
+            }
+        } catch (NumberFormatException e) {
+            // Se la primaryKey non è un numero (es. "abc"),
+            // cattura l'errore e non fare nulla.
+            // Il JSON array rimarrà vuoto (comportamento sicuro).
+            e.printStackTrace();
         }
     }
 
     //Prende il gusto dal DB tramite la primaryKey e la aggiunge ad un JSONARRAY
     private void showGustoRowTable(String primaryKey, JSONArray jsonArray) {
-        GustoDAO gustoDAO = new GustoDAO();
-        int idGusto = Integer.parseInt(primaryKey);
-        Gusto gusto = gustoDAO.doRetrieveById(idGusto);
-        if (gusto != null) {
-            jsonArray.add(gustoHelper(gusto));
+        try {
+            GustoDAO gustoDAO = new GustoDAO();
+            int idGusto = Integer.parseInt(primaryKey);
+            Gusto gusto = gustoDAO.doRetrieveById(idGusto);
+            if (gusto != null) {
+                jsonArray.add(gustoHelper(gusto));
+            }
+        } catch (NumberFormatException e) {
+            // Se la primaryKey non è un numero (es. "abc"),
+            // cattura l'errore e non fare nulla.
+            e.printStackTrace();
         }
     }
 
@@ -76,11 +89,17 @@ public class showRowForm extends HttpServlet {
         DettaglioOrdineDAO dettaglioOrdineDAO = new DettaglioOrdineDAO();
         String[] keys = primaryKey.split(", ");
         if (keys.length == 3) {
-            int idOrdine = Integer.parseInt(keys[0]);
-            int idVariante = Integer.parseInt(keys[2]);
-            DettaglioOrdine dettaglioOrdine = dettaglioOrdineDAO.doRetrieveByIdOrderAndIdVariant(idOrdine, idVariante);
-            if (dettaglioOrdine != null) {
-                jsonArray.add(dettaglioOrdineHelper(dettaglioOrdine));
+            try {
+                int idOrdine = Integer.parseInt(keys[0].trim()); // Aggiunto .trim() per sicurezza
+                int idVariante = Integer.parseInt(keys[2].trim());
+                DettaglioOrdine dettaglioOrdine = dettaglioOrdineDAO.doRetrieveByIdOrderAndIdVariant(idOrdine, idVariante);
+                if (dettaglioOrdine != null) {
+                    jsonArray.add(dettaglioOrdineHelper(dettaglioOrdine));
+                }
+            } catch (NumberFormatException e) {
+                // Se le chiavi non sono numeri (es. "a, b, c"),
+                // cattura l'errore e non fare nulla.
+                e.printStackTrace();
             }
         }
     }
@@ -89,21 +108,31 @@ public class showRowForm extends HttpServlet {
     //Prende l'ordine dal DB tramite la primaryKey e la aggiunge ad un JSONARRAY
 
     private void showOrdineRowTable(String primaryKey, JSONArray jsonArray) {
-        OrdineDao ordineDao = new OrdineDao();
-        Ordine ordine = ordineDao.doRetrieveById(Integer.parseInt(primaryKey));
-        if (ordine != null) {
-            System.out.println(ordine.getIdOrdine() + " OOOOKKK");
-            jsonArray.add(jsonOrdineHelper(ordine));
+        try {
+            OrdineDao ordineDao = new OrdineDao();
+            Ordine ordine = ordineDao.doRetrieveById(Integer.parseInt(primaryKey));
+            if (ordine != null) {
+                System.out.println(ordine.getIdOrdine() + " OOOOKKK");
+                jsonArray.add(jsonOrdineHelper(ordine));
+            }
+        } catch (NumberFormatException e) {
+            // Se la primaryKey non è un numero, cattura l'errore.
+            e.printStackTrace();
         }
     }
 
 
     //Prende la variante dal DB tramite la primaryKey e la aggiunge ad un JSONARRAY
     private void showVarianteRowTable(String primaryKey, JSONArray jsonArray) {
-        VarianteDAO varianteDAO = new VarianteDAO();
-        Variante variante = varianteDAO.doRetrieveVarianteByIdVariante(Integer.parseInt(primaryKey));
-        if (variante != null) {
-            jsonArray.add(jsonVarianteHelper(variante));
+        try {
+            VarianteDAO varianteDAO = new VarianteDAO();
+            Variante variante = varianteDAO.doRetrieveVarianteByIdVariante(Integer.parseInt(primaryKey));
+            if (variante != null) {
+                jsonArray.add(jsonVarianteHelper(variante));
+            }
+        } catch (NumberFormatException e) {
+            // Se la primaryKey non è un numero, cattura l'errore.
+            e.printStackTrace();
         }
     }
 

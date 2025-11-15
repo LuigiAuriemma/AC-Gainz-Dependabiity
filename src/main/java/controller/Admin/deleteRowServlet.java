@@ -26,6 +26,11 @@ public class deleteRowServlet extends HttpServlet {
         String primaryKey = req.getParameter("primaryKey");
         Utente utente = (Utente) req.getSession().getAttribute("Utente");
 
+        if (tableName == null || tableName.isBlank()) {
+            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parametro tableName mancante.");
+            return; // Interrompe l'esecuzione
+        }
+
         // usato per controllare se admin cancella il suo stesso profilo
         boolean isTheSame = false;
 
@@ -67,7 +72,13 @@ public class deleteRowServlet extends HttpServlet {
 
     private boolean checkIfAdminDeletingSelf(String primaryKey, Utente utente) {
         System.out.println("Checking if admin is deleting self");  // Log per debug
-        return primaryKey != null && !primaryKey.isBlank() && utente.getEmail().equals(primaryKey);
+
+        // Controlla prima che 'utente' non sia nullo
+        if (utente == null || primaryKey == null || primaryKey.isBlank()) {
+            return false;
+        }
+
+        return utente.getEmail().equals(primaryKey);
     }
 
 
@@ -95,13 +106,27 @@ public class deleteRowServlet extends HttpServlet {
 
     //metodo che rimuove la tupla dalla tabella dettaglio ordine(presenta 2 chiavi primarie)
     private boolean handleRemoveRowFromDettaglioOrdine(String primaryKey) {
-        if (primaryKey != null && !primaryKey.isBlank()) {
-            String[] primaryKeys = primaryKey.split(", ");
-            DettaglioOrdineDAO dettaglioOrdineDAO = new DettaglioOrdineDAO();
-            dettaglioOrdineDAO.doRemoveDettaglioOrdine(Integer.parseInt(primaryKeys[0]), Integer.parseInt(primaryKeys[2]));
-            return true;
+        if (primaryKey == null || primaryKey.isBlank()) {
+            return false;
         }
-        return false;
+
+        String[] primaryKeys = primaryKey.split(", ");
+
+        if (primaryKeys.length >= 3) {
+            try {
+                // Prendi gli ID (convertendoli in modo sicuro)
+                int idOrdine = Integer.parseInt(primaryKeys[0]);
+                int idVariante = Integer.parseInt(primaryKeys[2]);
+
+                DettaglioOrdineDAO dettaglioOrdineDAO = new DettaglioOrdineDAO();
+                dettaglioOrdineDAO.doRemoveDettaglioOrdine(idOrdine, idVariante);
+                return true;
+            } catch (NumberFormatException e) {
+                // Uno degli ID non era un numero
+                return false;
+            }
+        }
+        return false; // La PK non era formattata correttamente
     }
 
     private boolean handleRemoveRowFromOrdine(String primaryKey) {
@@ -126,15 +151,19 @@ public class deleteRowServlet extends HttpServlet {
     }
 
     private boolean handleRemoveRowFromProdotto(String primaryKey) {
-        if (primaryKey != null && !primaryKey.isBlank()) {
-            ProdottoDAO prodottoDAO = new ProdottoDAO();
-            Prodotto p = prodottoDAO.doRetrieveById(primaryKey);
-            if (p != null) {
-                prodottoDAO.removeProductFromIdProdotto(primaryKey);
-            }
-            return true;
+        if (primaryKey == null || primaryKey.isBlank()) {
+            return false;
         }
-        return false;
+
+        ProdottoDAO prodottoDAO = new ProdottoDAO();
+        Prodotto p = prodottoDAO.doRetrieveById(primaryKey);
+
+        if (p != null) {
+            prodottoDAO.removeProductFromIdProdotto(primaryKey);
+            return true; // Successo
+        }
+
+        return false; // Fallimento (prodotto non trovato)
     }
 
     private boolean handleRemoveRowFromUtente(String primaryKey){
@@ -234,7 +263,15 @@ public class deleteRowServlet extends HttpServlet {
     }
 
     private boolean isValidPrimaryKey(String primaryKey) {
-        return primaryKey != null && !primaryKey.isBlank() && Integer.parseInt(primaryKey) > 0;
+        if (primaryKey == null || primaryKey.isBlank()) {
+            return false;
+        }
+        try {
+            return Integer.parseInt(primaryKey) > 0;
+        } catch (NumberFormatException e) {
+            // Se non è un numero, non è una PK valida
+            return false;
+        }
     }
 
 

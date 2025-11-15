@@ -21,8 +21,14 @@ public class editRowServlet extends HttpServlet {
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         //prende il nome della tabella e la primarykey dalla request
         String tableName = req.getParameter("tableName");
-        System.out.println("tableName: " + tableName);
         String primaryKey = req.getParameter("primaryKey");
+
+        if (tableName == null || tableName.isBlank() || primaryKey == null || primaryKey.isBlank()) {
+            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parametri 'tableName' o 'primaryKey' mancanti.");
+            return;
+        }
+
+        System.out.println("tableName: " + tableName);
 
         boolean success = false;
 
@@ -64,7 +70,6 @@ public class editRowServlet extends HttpServlet {
         }
         return true;
     }
-
 
     //prende i parametri dalla request,crea un oggetto Utente avente quei parametri e poi tramite il DAO
     //aggiorna i parametri nel database
@@ -118,20 +123,27 @@ public class editRowServlet extends HttpServlet {
         String grassi = req.getParameter("grassi");
 
         if (isValid(List.of(idProdotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi))) {
-            Prodotto p = new Prodotto();
-            p.setIdProdotto(idProdotto);
-            p.setNome(nome);
-            p.setDescrizione(descrizione);
-            p.setCategoria(categoria);
-            p.setImmagine(immagine);
-            p.setCalorie(Integer.parseInt(calorie));
-            p.setCarboidrati(Integer.parseInt(carboidrati));
-            p.setProteine(Integer.parseInt(proteine));
-            p.setGrassi(Integer.parseInt(grassi));
 
-            ProdottoDAO prodottoDAO = new ProdottoDAO();
-            prodottoDAO.updateProduct(p, primaryKey);
-            return true;
+            try{
+                Prodotto p = new Prodotto();
+                p.setIdProdotto(idProdotto);
+                p.setNome(nome);
+                p.setDescrizione(descrizione);
+                p.setCategoria(categoria);
+                p.setImmagine(immagine);
+                p.setCalorie(Integer.parseInt(calorie));
+                p.setCarboidrati(Integer.parseInt(carboidrati));
+                p.setProteine(Integer.parseInt(proteine));
+                p.setGrassi(Integer.parseInt(grassi));
+
+                ProdottoDAO prodottoDAO = new ProdottoDAO();
+                prodottoDAO.updateProduct(p, primaryKey);
+                return true;
+            } catch (NumberFormatException e) {
+                // Se calorie, carboidrati, ecc. non sono numeri, fallisce
+                e.printStackTrace();
+                return false;
+            }
         }
         return false;
     }
@@ -150,19 +162,25 @@ public class editRowServlet extends HttpServlet {
         String evidenza = req.getParameter("evidenza");
 
         if (isValid(List.of(idVariante, idProdottoVariante, idGusto, idConfezione, prezzo, quantity, sconto, evidenza))) {
-            Variante v = new Variante();
-            v.setIdVariante(Integer.parseInt(idVariante));
-            v.setIdProdotto(idProdottoVariante);
-            v.setIdGusto(Integer.parseInt(idGusto));
-            v.setIdConfezione(Integer.parseInt(idConfezione));
-            v.setPrezzo(Float.parseFloat(prezzo));
-            v.setQuantita(Integer.parseInt(quantity));
-            v.setSconto(Integer.parseInt(sconto));
-            v.setEvidenza(Integer.parseInt(evidenza) == 1);
+            try {
+                Variante v = new Variante();
+                v.setIdVariante(Integer.parseInt(idVariante));
+                v.setIdProdotto(idProdottoVariante);
+                v.setIdGusto(Integer.parseInt(idGusto));
+                v.setIdConfezione(Integer.parseInt(idConfezione));
+                v.setPrezzo(Float.parseFloat(prezzo));
+                v.setQuantita(Integer.parseInt(quantity));
+                v.setSconto(Integer.parseInt(sconto));
+                v.setEvidenza(Integer.parseInt(evidenza) == 1);
 
-            VarianteDAO varianteDAO = new VarianteDAO();
-            varianteDAO.updateVariante(v, Integer.parseInt(primaryKey));
-            return true;
+                VarianteDAO varianteDAO = new VarianteDAO();
+                varianteDAO.updateVariante(v, Integer.parseInt(primaryKey));
+                return true;
+            } catch (NumberFormatException e) {
+                // Uno dei parametri non era un numero
+                e.printStackTrace(); // Logga l'errore
+                return false; // Interrompi e restituisci 'false'
+            }
         }
         return false;
     }
@@ -235,23 +253,37 @@ public class editRowServlet extends HttpServlet {
         String quantity = req.getParameter("quantity");
 
         if (isValid(List.of(idOrdine, idVariante, idProdotto, quantity))) {
-            int q = Integer.parseInt(quantity);
-            if (q < 0) return false;
 
-            DettaglioOrdine dettaglioOrdine = new DettaglioOrdine();
-            dettaglioOrdine.setIdOrdine(Integer.parseInt(idOrdine));
-            dettaglioOrdine.setIdProdotto(idProdotto);
-            dettaglioOrdine.setIdVariante(Integer.parseInt(idVariante));
-            dettaglioOrdine.setQuantita(q);
+            try {
+                int q = Integer.parseInt(quantity);
+                if (q < 0) return false;
 
-            String[] primaryKeys = primaryKey.split(", ");
-            int firstPK = Integer.parseInt(primaryKeys[0]);
-            String secondPK = primaryKeys[1];
-            int thirdPK = Integer.parseInt(primaryKeys[2]);
+                DettaglioOrdine dettaglioOrdine = new DettaglioOrdine();
+                dettaglioOrdine.setIdOrdine(Integer.parseInt(idOrdine));
+                dettaglioOrdine.setIdProdotto(idProdotto);
+                dettaglioOrdine.setIdVariante(Integer.parseInt(idVariante));
+                dettaglioOrdine.setQuantita(q);
 
-            DettaglioOrdineDAO dettaglioOrdineDAO = new DettaglioOrdineDAO();
-            dettaglioOrdineDAO.doUpdateDettaglioOrdine(dettaglioOrdine, firstPK, secondPK, thirdPK);
-            return true;
+                String[] primaryKeys = primaryKey.split(", ");
+
+                // Controlla che la chiave composita abbia il numero giusto di parti
+                if (primaryKeys.length < 3) {
+                    return false; // Chiave malformata
+                }
+
+                int firstPK = Integer.parseInt(primaryKeys[0].trim());
+                String secondPK = primaryKeys[1].trim();
+                int thirdPK = Integer.parseInt(primaryKeys[2].trim());
+
+                DettaglioOrdineDAO dettaglioOrdineDAO = new DettaglioOrdineDAO();
+                dettaglioOrdineDAO.doUpdateDettaglioOrdine(dettaglioOrdine, firstPK, secondPK, thirdPK);
+                return true;
+
+            } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
+                // Cattura sia se non è un numero, sia se l'array è troppo corto
+                e.printStackTrace();
+                return false;
+            }
         }
         return false;
     }
@@ -264,13 +296,19 @@ public class editRowServlet extends HttpServlet {
         String nomeGusto = req.getParameter("nomeGusto");
 
         if (isValid(List.of(idGusto, nomeGusto))) {
-            Gusto gusto = new Gusto();
-            gusto.setIdGusto(Integer.parseInt(idGusto));
-            gusto.setNome(nomeGusto);
+            try {
+                Gusto gusto = new Gusto();
+                gusto.setIdGusto(Integer.parseInt(idGusto));
+                gusto.setNome(nomeGusto);
 
-            GustoDAO gustoDAO = new GustoDAO();
-            gustoDAO.updateGusto(gusto, Integer.parseInt(primaryKey));
-            return true;
+                GustoDAO gustoDAO = new GustoDAO();
+                gustoDAO.updateGusto(gusto, Integer.parseInt(primaryKey));
+                return true;
+            } catch (NumberFormatException e) {
+                // Se calorie, carboidrati, ecc. non sono numeri, fallisce
+                e.printStackTrace();
+                return false;
+            }
         }
         return false;
     }
@@ -282,14 +320,27 @@ public class editRowServlet extends HttpServlet {
         String idConfezione = req.getParameter("idConfezione");
         String pesoConfezione = req.getParameter("pesoConfezione");
 
-        if (isValid(List.of(idConfezione, pesoConfezione)) && Integer.parseInt(pesoConfezione) > 0) {
-            Confezione confezione = new Confezione();
-            confezione.setIdConfezione(Integer.parseInt(idConfezione));
-            confezione.setPeso(Integer.parseInt(pesoConfezione));
+        if (isValid(List.of(idConfezione, pesoConfezione))) {
+            try {
+                int peso = Integer.parseInt(pesoConfezione);
 
-            ConfezioneDAO confezioneDAO = new ConfezioneDAO();
-            confezioneDAO.doUpdateConfezione(confezione, Integer.parseInt(primaryKey));
-            return true;
+                // Sposta il controllo logico DOPO il parsing
+                if (peso <= 0) {
+                    return false; // Non è un peso valido
+                }
+
+                Confezione confezione = new Confezione();
+                confezione.setIdConfezione(Integer.parseInt(idConfezione));
+                confezione.setPeso(peso);
+
+                ConfezioneDAO confezioneDAO = new ConfezioneDAO();
+                confezioneDAO.doUpdateConfezione(confezione, Integer.parseInt(primaryKey));
+                return true;
+            } catch (NumberFormatException e) {
+                // Se idConfezione, pesoConfezione o primaryKey non sono numeri, fallisce
+                e.printStackTrace();
+                return false;
+            }
         }
         return false;
     }
