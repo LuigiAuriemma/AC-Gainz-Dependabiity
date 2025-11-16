@@ -3,22 +3,10 @@ package model;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
-//DA CHECKARE
+
 public class GustoDAO {
 
-    /*@
-    @   public normal_behavior
-    @       requires id >= 0;
-    @       assignable \nothing;
-    @       // Il tuo codice ritorna un new Gusto() (con id=0) se non trova nulla.
-    @       ensures \result != null;
-    @       ensures \result.getIdGusto() >= 0;
-    @   public exceptional_behavior
-    @       requires id >= 0;
-    @       assignable \nothing;
-    @       // Diciamo a JML che una RuntimeException è un possibile risultato
-    @       signals (RuntimeException e) true;
-    @*/
+
     public Gusto doRetrieveById(int id){
         Gusto gusto = new Gusto();
         try (Connection connection = ConPool.getConnection()){
@@ -39,17 +27,6 @@ public class GustoDAO {
         return gusto;
     }
 
-    /*@
-    @   public normal_behavior
-    @       requires id >= 0;
-    @       assignable \nothing;
-    @       // Questo codice ritorna null se non trova, il che è un buon pattern
-    @       ensures \result == null || \result.getIdGusto() >= 0;
-    @   public exceptional_behavior
-    @       requires id >= 0;
-    @       assignable \nothing;
-    @       signals (RuntimeException e) true;
-    @*/
     public Gusto doRetrieveByIdVariante(int id) {
         Gusto gusto = null;
         try (Connection connection = ConPool.getConnection()) {
@@ -68,18 +45,6 @@ public class GustoDAO {
         return gusto;
     }
 
-    /*@
-    @   public normal_behavior
-    @       assignable \nothing;
-    @       // Il metodo garantisce che la lista restituita non è mai nulla
-    @       ensures \result != null;
-    @       // Garantisce anche che ogni elemento nella lista è un oggetto Gusto valido
-    @       ensures (\forall int i; 0 <= i && i < \result.size();
-    @                   \result.get(i) != null && \result.get(i).getIdGusto() >= 0);
-    @   public exceptional_behavior
-    @       assignable \nothing;
-    @       signals (RuntimeException e) true;
-    @*/
     public List<Gusto> doRetrieveAll() {
         List<Gusto> gusti = new ArrayList<>();
         try (Connection connection = ConPool.getConnection()){
@@ -102,20 +67,6 @@ public class GustoDAO {
         return gusti;
     }
 
-
-    /*@
-    @   public normal_behavior
-    @       requires g != null;
-    @       requires idGusto >= 0;
-    @       // Per un update, è ragionevole richiedere che il nome non sia nullo
-    @       requires g.getNomeGusto() != null;
-    @       assignable \nothing;
-    @   public exceptional_behavior
-    @       requires g != null;
-    @       requires idGusto >= 0;
-    @       assignable \nothing;
-    @       signals (RuntimeException e) true;
-    @*/
     public void updateGusto(Gusto g, int idGusto){
         try (Connection connection = ConPool.getConnection()){
             PreparedStatement preparedStatement = connection.prepareStatement("update gusto set id_gusto = ?, nomeGusto = ? where id_gusto = ?");
@@ -130,14 +81,6 @@ public class GustoDAO {
         }
     }
 
-    /*@
-    @   // Questo metodo ha un comportamento eccezionale diverso!
-    @   // Cattura l'eccezione ma NON la rilancia (e.printStackTrace() non conta per JML)
-    @   // Di conseguenza, dal punto di vista JML, questo metodo non fallisce mai.
-    @   public normal_behavior
-    @       requires g != null;
-    @       assignable \nothing;
-    @*/
     public void doSaveGusto(Gusto g) {
         StringBuilder stringBuilder = new StringBuilder("INSERT INTO gusto (");
         List<Object> parameters = new ArrayList<>();
@@ -184,15 +127,7 @@ public class GustoDAO {
         System.out.println(parameters); // Per debug
     }
 
-    /*@
-    @   public normal_behavior
-    @       requires idGusto >= 0;
-    @       assignable \nothing;
-    @   public exceptional_behavior
-    @       requires idGusto >= 0;
-    @       assignable \nothing;
-    @       signals (RuntimeException e) true;
-    @*/
+
     public void doRemoveGusto(int idGusto){
         try (Connection connection = ConPool.getConnection()){
             PreparedStatement preparedStatement = connection.prepareStatement("delete from gusto where id_gusto = ?");

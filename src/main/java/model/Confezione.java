@@ -1,17 +1,24 @@
 package model;
 
 public class Confezione {
-    /*@
-    @   public invariant
-    @   idConfezione >= 0 &&
-    @   peso >= 0;
-    @*/
+
     //@ spec_public
     private int idConfezione;
     //@ spec_public
     private int peso;
 
-    //@ pure
+    // --- AGGIUNGI QUESTO BLOCCO ---
+    /*@
+        assignable \nothing;
+        ensures idConfezione == 0;
+        ensures peso == 0;
+     @*/
+    public Confezione() {}
+
+    /*@
+    @ ensures \result == this.idConfezione;
+    @ pure
+    @*/
     public int getIdConfezione() {
         return idConfezione;
     }
@@ -25,7 +32,10 @@ public class Confezione {
     }
 
 
-    //@ pure
+    /*@
+    @ ensures \result == this.peso;
+    @ pure
+    @*/
     public int getPeso() {
         return peso;
     }
