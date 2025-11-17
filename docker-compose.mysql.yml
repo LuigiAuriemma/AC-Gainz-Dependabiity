@@ -16,7 +16,7 @@ services:
       start_period: 10s
 
   web:
-    image: luigiauriemma/ac-gainz-dependability:latest
+    image: luigiauriemma/ac-gainz-dependability:main
     depends_on:
       db:
         condition: service_healthy
