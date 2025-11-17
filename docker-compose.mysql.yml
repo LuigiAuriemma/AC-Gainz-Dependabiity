@@ -16,7 +16,7 @@ services:
       start_period: 10s
 
   web:
-    build: .
+    image: tuo-username/ac-gainz-dependability:latest
     depends_on:
       db:
         condition: service_healthy
