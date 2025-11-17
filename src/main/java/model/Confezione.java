@@ -7,42 +7,36 @@ public class Confezione {
     //@ spec_public
     private int peso;
 
-    // --- AGGIUNGI QUESTO BLOCCO ---
-    /*@
-        assignable \nothing;
-        ensures idConfezione == 0;
-        ensures peso == 0;
-     @*/
     public Confezione() {}
 
-    /*@
-    @ ensures \result == this.idConfezione;
-    @ pure
+    /*@ 
+    @ ensures \result == idConfezione;
+    @ pure 
     @*/
     public int getIdConfezione() {
         return idConfezione;
     }
-    /*@
-    @   requires idConfezione > 0;
-    @   assignable this.idConfezione;
-    @   ensures this.idConfezione == idConfezione;
+    
+    /*@ 
+    @ ensures this.idConfezione == idConfezione;
+    @ assignable this.idConfezione; 
     @*/
     public void setIdConfezione(int idConfezione) {
         this.idConfezione = idConfezione;
     }
 
 
-    /*@
-    @ ensures \result == this.peso;
-    @ pure
+    /*@ 
+    @ ensures \result == peso;
+    @ pure 
     @*/
     public int getPeso() {
         return peso;
     }
-    /*@
-    @   requires peso > 0;
-    @   assignable this.peso;
-    @   ensures this.peso == peso;
+    
+    /*@ 
+    @ ensures this.peso == peso;
+    @ assignable this.peso; 
     @*/
     public void setPeso(int peso) {
         this.peso = peso;
