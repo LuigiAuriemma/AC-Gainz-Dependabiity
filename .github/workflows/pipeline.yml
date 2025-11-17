@@ -1,0 +1,35 @@
+name: Java CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # --- JOB 1: ESECUZIONE DEI TEST (con Java 21) ---
+  # --- Vengono fatti prima i test poichè nel dockerfile vengono esclusi ---
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+          
+      - name: Run Maven Tests
+        run: mvn -B test --file pom.xml
+
+  # --- JOB 2: BUILD IMMAGINE DOCKER ---
+  build_docker:
+    needs: test 
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build the Docker image
+        run: docker build . --file Dockerfile --tag my-image-name:latest
