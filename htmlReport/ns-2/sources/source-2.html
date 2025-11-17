@@ -1,0 +1,415 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > deleteRowServlet</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">controller.Admin</a>
+</div>
+
+<h1>Coverage Summary for Class: deleteRowServlet (controller.Admin)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">deleteRowServlet</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    59,1%
+  </span>
+  <span class="absValue">
+    (13/22)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    45,2%
+  </span>
+  <span class="absValue">
+    (38/84)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    46,2%
+  </span>
+  <span class="absValue">
+    (67/145)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package controller.Admin;
+&nbsp;
+&nbsp;import jakarta.servlet.ServletException;
+&nbsp;import jakarta.servlet.annotation.WebServlet;
+&nbsp;import jakarta.servlet.http.HttpServlet;
+&nbsp;import jakarta.servlet.http.HttpServletRequest;
+&nbsp;import jakarta.servlet.http.HttpServletResponse;
+&nbsp;import model.*;
+&nbsp;import org.json.simple.JSONArray;
+&nbsp;import org.json.simple.JSONObject;
+&nbsp;
+&nbsp;import java.io.IOException;
+&nbsp;import java.io.PrintWriter;
+&nbsp;import java.text.SimpleDateFormat;
+&nbsp;import java.util.List;
+&nbsp;
+&nbsp;import static controller.Admin.showRowForm.*;
+&nbsp;
+&nbsp;@WebServlet(value = &quot;/deleteRow&quot;)
+&nbsp;
+<b class="fc">&nbsp;public class deleteRowServlet extends HttpServlet {</b>
+&nbsp;    @Override
+&nbsp;    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+&nbsp;        //prendiamo i dati dalla request
+<b class="fc">&nbsp;        String tableName = req.getParameter(&quot;tableName&quot;);</b>
+<b class="fc">&nbsp;        String primaryKey = req.getParameter(&quot;primaryKey&quot;);</b>
+<b class="fc">&nbsp;        Utente utente = (Utente) req.getSession().getAttribute(&quot;Utente&quot;);</b>
+&nbsp;
+<b class="pc">&nbsp;        if (tableName == null || tableName.isBlank()) {</b>
+<b class="fc">&nbsp;            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, &quot;Parametro tableName mancante.&quot;);</b>
+&nbsp;            return; // Interrompe l&#39;esecuzione
+&nbsp;        }
+&nbsp;
+&nbsp;        // usato per controllare se admin cancella il suo stesso profilo
+<b class="fc">&nbsp;        boolean isTheSame = false;</b>
+&nbsp;
+<b class="fc">&nbsp;        JSONArray jsonArray = null;</b>
+<b class="pc">&nbsp;        boolean success = switch (tableName) {</b>
+<b class="fc">&nbsp;            case &quot;utente&quot; -&gt; handleRemoveRowFromUtente(primaryKey);</b>
+<b class="fc">&nbsp;            case &quot;prodotto&quot; -&gt; handleRemoveRowFromProdotto(primaryKey);</b>
+<b class="nc">&nbsp;            case &quot;variante&quot; -&gt; handleRemoveRowFromVariante(primaryKey);</b>
+<b class="nc">&nbsp;            case &quot;ordine&quot; -&gt; handleRemoveRowFromOrdine(primaryKey);</b>
+<b class="fc">&nbsp;            case &quot;dettaglioOrdine&quot; -&gt; handleRemoveRowFromDettaglioOrdine(primaryKey);</b>
+<b class="nc">&nbsp;            case &quot;gusto&quot; -&gt; handleRemoveRowFromGusto(primaryKey);</b>
+<b class="fc">&nbsp;            case &quot;confezione&quot; -&gt; handleRemoveRowFromConfezione(primaryKey);</b>
+<b class="fc">&nbsp;            default -&gt; false;</b>
+&nbsp;        };
+&nbsp;
+&nbsp;
+<b class="fc">&nbsp;        if (success &amp;&amp; tableName.equals(&quot;utente&quot;)) {</b>
+<b class="fc">&nbsp;            isTheSame = checkIfAdminDeletingSelf(primaryKey, utente);</b>
+&nbsp;        }
+&nbsp;
+&nbsp;
+<b class="fc">&nbsp;        if (isTheSame) {</b>
+<b class="fc">&nbsp;            req.getSession(false).invalidate();</b>
+<b class="fc">&nbsp;            resp.sendRedirect(&quot;index.jsp&quot;);</b>
+&nbsp;            return; // Interrompe l&#39;esecuzione
+&nbsp;        } else {
+<b class="fc">&nbsp;            if (success) {</b>
+<b class="fc">&nbsp;                jsonArray = getJsonArrayForTable(tableName);</b>
+&nbsp;            }
+&nbsp;
+<b class="fc">&nbsp;            if (jsonArray != null) {</b>
+<b class="fc">&nbsp;                sendJsonResponse(jsonArray, resp);</b>
+&nbsp;            } else {
+<b class="fc">&nbsp;                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, &quot;Invalid table name or primary key.&quot;);</b>
+&nbsp;            }
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;
+&nbsp;    private boolean checkIfAdminDeletingSelf(String primaryKey, Utente utente) {
+<b class="fc">&nbsp;        System.out.println(&quot;Checking if admin is deleting self&quot;);  // Log per debug</b>
+&nbsp;
+&nbsp;        // Controlla prima che &#39;utente&#39; non sia nullo
+<b class="pc">&nbsp;        if (utente == null || primaryKey == null || primaryKey.isBlank()) {</b>
+<b class="fc">&nbsp;            return false;</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        return utente.getEmail().equals(primaryKey);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;
+&nbsp;
+&nbsp;
+&nbsp;    private boolean handleRemoveRowFromConfezione(String primaryKey) {
+<b class="fc">&nbsp;        ConfezioneDAO confezioneDAO = new ConfezioneDAO();</b>
+<b class="pc">&nbsp;        if (isValidPrimaryKey(primaryKey)) {</b>
+<b class="nc">&nbsp;            int idConfezione = Integer.parseInt(primaryKey);</b>
+<b class="nc">&nbsp;            confezioneDAO.doRemoveConfezione(idConfezione);</b>
+<b class="nc">&nbsp;            return true;</b>
+&nbsp;        }
+<b class="fc">&nbsp;        return false;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private boolean handleRemoveRowFromGusto(String primaryKey) {
+<b class="nc">&nbsp;        if (isValidPrimaryKey(primaryKey)) {</b>
+<b class="nc">&nbsp;            int idGusto = Integer.parseInt(primaryKey);</b>
+<b class="nc">&nbsp;            GustoDAO gustoDAO = new GustoDAO();</b>
+<b class="nc">&nbsp;            gustoDAO.doRemoveGusto(idGusto);</b>
+<b class="nc">&nbsp;            return true;</b>
+&nbsp;        }
+<b class="nc">&nbsp;        return false;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    //metodo che rimuove la tupla dalla tabella dettaglio ordine(presenta 2 chiavi primarie)
+&nbsp;    private boolean handleRemoveRowFromDettaglioOrdine(String primaryKey) {
+<b class="pc">&nbsp;        if (primaryKey == null || primaryKey.isBlank()) {</b>
+<b class="nc">&nbsp;            return false;</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        String[] primaryKeys = primaryKey.split(&quot;, &quot;);</b>
+&nbsp;
+<b class="pc">&nbsp;        if (primaryKeys.length &gt;= 3) {</b>
+&nbsp;            try {
+&nbsp;                // Prendi gli ID (convertendoli in modo sicuro)
+<b class="nc">&nbsp;                int idOrdine = Integer.parseInt(primaryKeys[0]);</b>
+<b class="nc">&nbsp;                int idVariante = Integer.parseInt(primaryKeys[2]);</b>
+&nbsp;
+<b class="nc">&nbsp;                DettaglioOrdineDAO dettaglioOrdineDAO = new DettaglioOrdineDAO();</b>
+<b class="nc">&nbsp;                dettaglioOrdineDAO.doRemoveDettaglioOrdine(idOrdine, idVariante);</b>
+<b class="nc">&nbsp;                return true;</b>
+&nbsp;            } catch (NumberFormatException e) {
+&nbsp;                // Uno degli ID non era un numero
+<b class="nc">&nbsp;                return false;</b>
+&nbsp;            }
+&nbsp;        }
+<b class="fc">&nbsp;        return false; // La PK non era formattata correttamente</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private boolean handleRemoveRowFromOrdine(String primaryKey) {
+<b class="nc">&nbsp;        if (isValidPrimaryKey(primaryKey)) {</b>
+<b class="nc">&nbsp;            OrdineDao ordineDao = new OrdineDao();</b>
+<b class="nc">&nbsp;            ordineDao.doDeleteOrder(Integer.parseInt(primaryKey));</b>
+<b class="nc">&nbsp;            return true;</b>
+&nbsp;        }
+<b class="nc">&nbsp;        return false;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private boolean handleRemoveRowFromVariante(String primaryKey) {
+<b class="nc">&nbsp;        if (isValidPrimaryKey(primaryKey)) {</b>
+<b class="nc">&nbsp;            VarianteDAO varianteDAO = new VarianteDAO();</b>
+<b class="nc">&nbsp;            Variante v = varianteDAO.doRetrieveVarianteByIdVariante(Integer.parseInt(primaryKey));</b>
+<b class="nc">&nbsp;            if (v != null) {</b>
+<b class="nc">&nbsp;                varianteDAO.doRemoveVariante(Integer.parseInt(primaryKey));</b>
+&nbsp;            }
+<b class="nc">&nbsp;            return true;</b>
+&nbsp;        }
+<b class="nc">&nbsp;        return false;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private boolean handleRemoveRowFromProdotto(String primaryKey) {
+<b class="pc">&nbsp;        if (primaryKey == null || primaryKey.isBlank()) {</b>
+<b class="nc">&nbsp;            return false;</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        ProdottoDAO prodottoDAO = new ProdottoDAO();</b>
+<b class="fc">&nbsp;        Prodotto p = prodottoDAO.doRetrieveById(primaryKey);</b>
+&nbsp;
+<b class="fc">&nbsp;        if (p != null) {</b>
+<b class="fc">&nbsp;            prodottoDAO.removeProductFromIdProdotto(primaryKey);</b>
+<b class="fc">&nbsp;            return true; // Successo</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        return false; // Fallimento (prodotto non trovato)</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private boolean handleRemoveRowFromUtente(String primaryKey){
+<b class="pc">&nbsp;        if (primaryKey != null &amp;&amp; !primaryKey.isBlank()) {</b>
+<b class="fc">&nbsp;            UtenteDAO utenteDAO = new UtenteDAO();</b>
+<b class="fc">&nbsp;            Utente u = utenteDAO.doRetrieveByEmail(primaryKey);</b>
+<b class="pc">&nbsp;            if (u != null) {</b>
+<b class="fc">&nbsp;                utenteDAO.doRemoveUserByEmail(u.getEmail());</b>
+<b class="fc">&nbsp;                return true;</b>
+&nbsp;            }
+&nbsp;        }
+<b class="nc">&nbsp;        return false;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    //metodo che in base a tableName prende tutte le tuple e le inserisce in un JSONArray
+&nbsp;    private JSONArray getJsonArrayForTable(String tableName) {
+<b class="pc">&nbsp;        return switch (tableName) {</b>
+<b class="fc">&nbsp;            case &quot;utente&quot; -&gt; getAllUtentiJsonArray(new UtenteDAO());</b>
+<b class="fc">&nbsp;            case &quot;prodotto&quot; -&gt; getAllProdottiJsonArray(new ProdottoDAO());</b>
+<b class="nc">&nbsp;            case &quot;variante&quot; -&gt; getAllVariantiJsonArray(new VarianteDAO());</b>
+<b class="nc">&nbsp;            case &quot;ordine&quot; -&gt; getAllOrdiniJsonArray(new OrdineDao());</b>
+<b class="nc">&nbsp;            case &quot;dettaglioOrdine&quot; -&gt; getAllDettagliOrdiniJsonArray(new DettaglioOrdineDAO());</b>
+<b class="nc">&nbsp;            case &quot;gusto&quot; -&gt; getAllGustiJsonArray(new GustoDAO());</b>
+<b class="nc">&nbsp;            case &quot;confezione&quot; -&gt; getAllConfezioniJsonArray(new ConfezioneDAO());</b>
+<b class="nc">&nbsp;            default -&gt; null;</b>
+&nbsp;        };
+&nbsp;    }
+&nbsp;
+&nbsp;    private static JSONArray getAllUtentiJsonArray(UtenteDAO utenteDAO) {
+<b class="fc">&nbsp;        List&lt;Utente&gt; utenti = utenteDAO.doRetrieveAll();</b>
+<b class="fc">&nbsp;        JSONArray jsonArray = new JSONArray();</b>
+<b class="pc">&nbsp;        for (Utente utente : utenti) {</b>
+<b class="nc">&nbsp;            jsonArray.add(jsonHelperHere(utente));</b>
+&nbsp;        }
+<b class="fc">&nbsp;        return jsonArray;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private static JSONArray getAllProdottiJsonArray(ProdottoDAO prodottoDAO) {
+<b class="fc">&nbsp;        List&lt;Prodotto&gt; prodotti = prodottoDAO.doRetrieveAll();</b>
+<b class="fc">&nbsp;        JSONArray jsonArray = new JSONArray();</b>
+<b class="pc">&nbsp;        for (Prodotto prodotto : prodotti) {</b>
+<b class="nc">&nbsp;            jsonArray.add(jsonProductHelper(prodotto));</b>
+&nbsp;        }
+<b class="fc">&nbsp;        return jsonArray;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private static JSONArray getAllVariantiJsonArray(VarianteDAO varianteDAO) {
+<b class="nc">&nbsp;        List&lt;Variante&gt; varianti = varianteDAO.doRetrieveAll();</b>
+<b class="nc">&nbsp;        JSONArray jsonArray = new JSONArray();</b>
+<b class="nc">&nbsp;        for (Variante variante : varianti) {</b>
+<b class="nc">&nbsp;            jsonArray.add(jsonVarianteHelper(variante));</b>
+&nbsp;        }
+<b class="nc">&nbsp;        return jsonArray;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private static JSONArray getAllOrdiniJsonArray(OrdineDao ordineDao) {
+<b class="nc">&nbsp;        List&lt;Ordine&gt; ordini = ordineDao.doRetrieveAll();</b>
+<b class="nc">&nbsp;        JSONArray jsonArray = new JSONArray();</b>
+<b class="nc">&nbsp;        for (Ordine ordine : ordini) {</b>
+<b class="nc">&nbsp;            jsonArray.add(jsonOrdineHelper(ordine));</b>
+&nbsp;        }
+<b class="nc">&nbsp;        return jsonArray;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private static JSONArray getAllDettagliOrdiniJsonArray(DettaglioOrdineDAO dettaglioOrdineDAO) {
+<b class="nc">&nbsp;        List&lt;DettaglioOrdine&gt; dettagliOrdini = dettaglioOrdineDAO.doRetrieveAll();</b>
+<b class="nc">&nbsp;        JSONArray jsonArray = new JSONArray();</b>
+<b class="nc">&nbsp;        for (DettaglioOrdine dettaglioOrdine : dettagliOrdini) {</b>
+<b class="nc">&nbsp;            jsonArray.add(dettaglioOrdineHelper(dettaglioOrdine));</b>
+&nbsp;        }
+<b class="nc">&nbsp;        return jsonArray;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private static JSONArray getAllGustiJsonArray(GustoDAO gustoDAO) {
+<b class="nc">&nbsp;        List&lt;Gusto&gt; gusti = gustoDAO.doRetrieveAll();</b>
+<b class="nc">&nbsp;        JSONArray jsonArray = new JSONArray();</b>
+<b class="nc">&nbsp;        for (Gusto gusto : gusti) {</b>
+<b class="nc">&nbsp;            jsonArray.add(gustoHelper(gusto));</b>
+&nbsp;        }
+<b class="nc">&nbsp;        return jsonArray;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private static JSONArray getAllConfezioniJsonArray(ConfezioneDAO confezioneDAO) {
+<b class="nc">&nbsp;        List&lt;Confezione&gt; confezioni = confezioneDAO.doRetrieveAll();</b>
+<b class="nc">&nbsp;        JSONArray jsonArray = new JSONArray();</b>
+<b class="nc">&nbsp;        for (Confezione confezione : confezioni) {</b>
+<b class="nc">&nbsp;            jsonArray.add(confezioneHelper(confezione));</b>
+&nbsp;        }
+<b class="nc">&nbsp;        return jsonArray;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private static void sendJsonResponse(JSONArray jsonArray, HttpServletResponse response) throws IOException {
+<b class="fc">&nbsp;        response.setContentType(&quot;application/json&quot;);</b>
+<b class="fc">&nbsp;        PrintWriter o = response.getWriter();</b>
+<b class="fc">&nbsp;        o.println(jsonArray);</b>
+<b class="fc">&nbsp;        o.flush();</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private boolean isValidPrimaryKey(String primaryKey) {
+<b class="pc">&nbsp;        if (primaryKey == null || primaryKey.isBlank()) {</b>
+<b class="nc">&nbsp;            return false;</b>
+&nbsp;        }
+&nbsp;        try {
+<b class="pc">&nbsp;            return Integer.parseInt(primaryKey) &gt; 0;</b>
+&nbsp;        } catch (NumberFormatException e) {
+&nbsp;            // Se non è un numero, non è una PK valida
+<b class="fc">&nbsp;            return false;</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;
+&nbsp;    //metodo che crea un oggetto JSON dell&#39;utente
+&nbsp;    protected static JSONObject jsonHelperHere(Utente x) {
+<b class="nc">&nbsp;        JSONObject userObject = new JSONObject();</b>
+<b class="nc">&nbsp;        userObject.put(&quot;email&quot;, x.getEmail());</b>
+<b class="nc">&nbsp;        userObject.put(&quot;nome&quot;, x.getNome());</b>
+<b class="nc">&nbsp;        userObject.put(&quot;cognome&quot;, x.getCognome());</b>
+<b class="nc">&nbsp;        userObject.put(&quot;codiceFiscale&quot;, x.getCodiceFiscale());</b>
+<b class="nc">&nbsp;        if (x.getDataNascita() != null) {</b>
+<b class="nc">&nbsp;            userObject.put(&quot;dataDiNascita&quot;, new SimpleDateFormat(&quot;yyyy-MM-dd&quot;).format(x.getDataNascita()));</b>
+&nbsp;        } else {
+<b class="nc">&nbsp;            userObject.put(&quot;dataDiNascita&quot;, &quot;&quot;);</b>
+&nbsp;        }
+<b class="nc">&nbsp;        userObject.put(&quot;indirizzo&quot;, x.getIndirizzo());</b>
+<b class="nc">&nbsp;        userObject.put(&quot;telefono&quot;, x.getTelefono());</b>
+<b class="nc">&nbsp;        return userObject;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    @Override
+&nbsp;    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+<b class="fc">&nbsp;        doGet(req, resp);</b>
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2025-11-17 10:45</div>
+</div>
+</body>
+</html>

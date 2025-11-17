@@ -1,0 +1,186 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > ProductServlet</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">controller.homepage</a>
+</div>
+
+<h1>Coverage Summary for Class: ProductServlet (controller.homepage)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ProductServlet</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (3/3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    91,7%
+  </span>
+  <span class="absValue">
+    (11/12)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (27/27)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package controller.homepage;
+&nbsp;
+&nbsp;import jakarta.servlet.ServletException;
+&nbsp;import jakarta.servlet.annotation.WebServlet;
+&nbsp;import jakarta.servlet.http.HttpServlet;
+&nbsp;import jakarta.servlet.http.HttpServletRequest;
+&nbsp;import jakarta.servlet.http.HttpServletResponse;
+&nbsp;import model.Prodotto;
+&nbsp;import model.ProdottoDAO;
+&nbsp;import model.Variante;
+&nbsp;import model.VarianteDAO;
+&nbsp;
+&nbsp;import java.io.IOException;
+&nbsp;import java.util.ArrayList;
+&nbsp;import java.util.List;
+&nbsp;
+&nbsp;@WebServlet(value = &quot;/ProductInfo&quot;)
+<b class="fc">&nbsp;public class ProductServlet extends HttpServlet {</b>
+&nbsp;
+&nbsp;    @Override
+&nbsp;    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+&nbsp;        //prendiamo dalla request la primarykey del prodotto cliccato
+<b class="fc">&nbsp;        String primaryKey = req.getParameter(&quot;primaryKey&quot;);</b>
+<b class="fc">&nbsp;        System.out.println(primaryKey);</b>
+<b class="fc">&nbsp;        if(primaryKey != null) {</b>
+&nbsp;                //andiamo a prendere tutti i valori del prodotto selezionato
+<b class="fc">&nbsp;                ProdottoDAO prodottoDAO = new ProdottoDAO();</b>
+<b class="fc">&nbsp;                Prodotto prodotto = prodottoDAO.doRetrieveById(primaryKey);</b>
+<b class="fc">&nbsp;                if(prodotto != null) {</b>
+<b class="fc">&nbsp;                    ProdottoDAO suggeritiDAO = new ProdottoDAO();</b>
+&nbsp;
+&nbsp;                    //prendiamo tutte le sue varianti
+<b class="fc">&nbsp;                    VarianteDAO varianteDAO = new VarianteDAO();</b>
+<b class="fc">&nbsp;                    List&lt;Variante&gt; varianti = prodotto.getVarianti();</b>
+&nbsp;
+&nbsp;                    //creiamo una lista di tutti i suoi gusti
+<b class="fc">&nbsp;                    List&lt;String&gt; gusti = new ArrayList&lt;&gt;();</b>
+<b class="fc">&nbsp;                    for (Variante v: varianti){</b>
+<b class="fc">&nbsp;                        if (!gusti.contains(v.getGusto())){</b>
+<b class="fc">&nbsp;                            gusti.add(v.getGusto());</b>
+&nbsp;                        }
+&nbsp;                    }
+&nbsp;
+&nbsp;                    //Lista di pesi associati al gusto della variante di costo inferiore
+<b class="fc">&nbsp;                    List&lt;Integer&gt; pesi = new ArrayList&lt;&gt;();</b>
+<b class="fc">&nbsp;                    List&lt;Variante&gt; variantiCriteria = varianteDAO.doRetrieveVariantByCriteria(prodotto.getIdProdotto(), &quot;flavour&quot;, varianti.get(0).getGusto());</b>
+&nbsp;
+<b class="fc">&nbsp;                    for (Variante y: variantiCriteria){</b>
+<b class="pc">&nbsp;                        if (!pesi.contains(y.getPesoConfezione()))</b>
+<b class="fc">&nbsp;                            pesi.add(y.getPesoConfezione());</b>
+&nbsp;                    }
+&nbsp;
+<b class="fc">&nbsp;                    req.setAttribute(&quot;allTastes&quot;, gusti);</b>
+<b class="fc">&nbsp;                    req.setAttribute(&quot;firstWeights&quot;, pesi);</b>
+&nbsp;
+&nbsp;                    //sezione dei suggeriti
+<b class="fc">&nbsp;                    String category = prodotto.getCategoria();</b>
+<b class="fc">&nbsp;                    List&lt;Prodotto&gt; suggeriti = suggeritiDAO.doRetrieveByCriteria(&quot;categoria&quot;,category);</b>
+<b class="fc">&nbsp;                    req.setAttribute(&quot;suggeriti&quot;,suggeriti);</b>
+<b class="fc">&nbsp;                    req.setAttribute(&quot;prodotto&quot;,prodotto);</b>
+<b class="fc">&nbsp;                    req.getRequestDispatcher(&quot;Product.jsp&quot;).forward(req,resp);</b>
+&nbsp;                }
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    @Override
+&nbsp;    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+<b class="fc">&nbsp;        doGet(req,resp);</b>
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2025-11-17 10:45</div>
+</div>
+</body>
+</html>

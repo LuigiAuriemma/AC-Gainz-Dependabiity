@@ -1,0 +1,267 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > GenericFilterServlet</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">controller.Filters</a>
+</div>
+
+<h1>Coverage Summary for Class: GenericFilterServlet (controller.Filters)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">GenericFilterServlet</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (6/6)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    81,2%
+  </span>
+  <span class="absValue">
+    (13/16)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    96,6%
+  </span>
+  <span class="absValue">
+    (57/59)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package controller.Filters;
+&nbsp;
+&nbsp;import jakarta.servlet.ServletException;
+&nbsp;import jakarta.servlet.annotation.WebServlet;
+&nbsp;import jakarta.servlet.http.HttpServlet;
+&nbsp;import jakarta.servlet.http.HttpServletRequest;
+&nbsp;import jakarta.servlet.http.HttpServletResponse;
+&nbsp;import jakarta.servlet.http.HttpSession;
+&nbsp;import model.Prodotto;
+&nbsp;import model.ProdottoDAO;
+&nbsp;import model.Variante;
+&nbsp;import org.json.simple.JSONArray;
+&nbsp;import org.json.simple.JSONObject;
+&nbsp;
+&nbsp;import java.io.IOException;
+&nbsp;import java.io.PrintWriter;
+&nbsp;import java.sql.SQLException;
+&nbsp;import java.util.ArrayList;
+&nbsp;import java.util.List;
+&nbsp;
+&nbsp;@WebServlet(&quot;/genericFilter&quot;)
+<b class="fc">&nbsp;public class GenericFilterServlet extends HttpServlet {</b>
+&nbsp;    @Override
+&nbsp;    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+&nbsp;
+<b class="fc">&nbsp;        HttpSession session = req.getSession();</b>
+<b class="fc">&nbsp;        synchronized (session) { // race condition sulle sessioni possibile dato che si usa ajax</b>
+&nbsp;
+&nbsp;        //Viene chiamato il metodo handleNameForm in base a nameForm passato da request
+<b class="fc">&nbsp;        String nameForm = req.getParameter(&quot;nameForm&quot;);</b>
+<b class="fc">&nbsp;        if (nameForm != null){</b>
+&nbsp;            try {
+<b class="fc">&nbsp;                handleNameForm(nameForm, req, resp, session);</b>
+&nbsp;            } catch (SQLException e) {
+<b class="fc">&nbsp;                throw new RuntimeException(e);</b>
+&nbsp;            }
+<b class="fc">&nbsp;            return;</b>
+&nbsp;        }
+&nbsp;
+&nbsp;
+&nbsp;            //prende dalla sessione e dalla request i parametri per i campi dei vari filtri
+<b class="fc">&nbsp;            String category = (String) session.getAttribute(&quot;categoria&quot;);</b>
+<b class="fc">&nbsp;            String nameFilter = &quot;&quot;;</b>
+<b class="pc">&nbsp;            if (session.getAttribute(&quot;searchBarName&quot;) != null)</b>
+<b class="nc">&nbsp;                nameFilter = (String) session.getAttribute(&quot;searchBarName&quot;);</b>
+<b class="fc">&nbsp;            String weightFilter = req.getParameter(&quot;weight&quot;);</b>
+<b class="fc">&nbsp;            String tasteFilter = req.getParameter(&quot;taste&quot;);</b>
+<b class="fc">&nbsp;            String sortingFilter = req.getParameter(&quot;sorting&quot;);</b>
+&nbsp;
+&nbsp;
+&nbsp;
+<b class="fc">&nbsp;            List&lt;Prodotto&gt; filteredProducts = new ArrayList&lt;&gt;();</b>
+<b class="fc">&nbsp;            ProdottoDAO prodottoDAO = new ProdottoDAO();</b>
+&nbsp;
+&nbsp;
+&nbsp;            //metodo che ritorna i prodotti filtrati in base a tutti i filtri
+&nbsp;            try {
+<b class="fc">&nbsp;                filteredProducts = prodottoDAO.filterProducts(category, sortingFilter, weightFilter, tasteFilter, nameFilter);</b>
+&nbsp;            } catch (SQLException e) {
+<b class="fc">&nbsp;                throw new RuntimeException(e);</b>
+&nbsp;            }
+&nbsp;
+&nbsp;            // Aggiornare la lista di prodotti filtrati nella sessione per visualizzare i gusti tramite showTasteServlet
+<b class="fc">&nbsp;            session.setAttribute(&quot;filteredProducts&quot;, filteredProducts);</b>
+&nbsp;
+&nbsp;            // Inviare la risposta JSON al client
+<b class="fc">&nbsp;            sendJsonResponse(resp, filteredProducts);</b>
+<b class="fc">&nbsp;        }</b>
+&nbsp;    }
+&nbsp;
+&nbsp;
+&nbsp;    //metodo che in base al NameForm crea una lista di prodotti che rispettano tale NameForm
+&nbsp;    private void handleNameForm(String nameForm, HttpServletRequest request, HttpServletResponse response, HttpSession session) throws ServletException, IOException, SQLException {
+<b class="fc">&nbsp;        List&lt;Prodotto&gt; products = new ArrayList&lt;&gt;();</b>
+&nbsp;
+<b class="fc">&nbsp;        ProdottoDAO prodottoDAO = new ProdottoDAO();</b>
+&nbsp;
+<b class="fc">&nbsp;        if (nameForm.isBlank()){</b>
+<b class="fc">&nbsp;            products = prodottoDAO.doRetrieveAll();</b>
+<b class="fc">&nbsp;            session.removeAttribute(&quot;categoria&quot;);</b>
+&nbsp;        }else {
+<b class="fc">&nbsp;            products = prodottoDAO.filterProducts(&quot;&quot;, &quot;&quot;, &quot;&quot;, &quot;&quot;, nameForm);</b>
+&nbsp;        }
+<b class="fc">&nbsp;        request.setAttribute(&quot;originalProducts&quot;, products);</b>
+<b class="fc">&nbsp;        session.setAttribute(&quot;searchBarName&quot;, nameForm);</b>
+<b class="fc">&nbsp;        session.setAttribute(&quot;filteredProducts&quot;, products);</b>
+&nbsp;
+<b class="fc">&nbsp;        request.getRequestDispatcher(&quot;FilterProducts.jsp&quot;).forward(request, response);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;
+&nbsp;    // Metodo per inviare la risposta JSON al client
+&nbsp;    private void sendJsonResponse(HttpServletResponse resp, List&lt;Prodotto&gt; resultProducts) throws IOException {
+<b class="fc">&nbsp;        resp.setContentType(&quot;application/json&quot;);</b>
+<b class="fc">&nbsp;        PrintWriter out = resp.getWriter();</b>
+<b class="fc">&nbsp;        JSONArray jsonArray = new JSONArray();</b>
+&nbsp;
+<b class="fc">&nbsp;        for (Prodotto p : resultProducts) {</b>
+<b class="fc">&nbsp;            JSONObject jsonObject = getJsonObject(p);</b>
+&nbsp;
+&nbsp;            // Se getJsonObject ha restituito null (perché il prodotto
+&nbsp;            // non ha varianti), salta l&#39;aggiunta all&#39;array.
+<b class="fc">&nbsp;            if (jsonObject != null) {</b>
+<b class="fc">&nbsp;                jsonArray.add(jsonObject);</b>
+&nbsp;            }
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        out.println(jsonArray);</b>
+<b class="fc">&nbsp;        out.flush();</b>
+&nbsp;    }
+&nbsp;
+&nbsp;
+&nbsp;    //metodo che serve per creare un oggetto JSON del prodotto scelto
+&nbsp;    public static JSONObject getJsonObject(Prodotto p) {
+&nbsp;
+&nbsp;        // 1. Controlla se la lista di varianti è valida
+<b class="fc">&nbsp;        List&lt;Variante&gt; varianti = p.getVarianti();</b>
+<b class="pc">&nbsp;        if (varianti == null || varianti.isEmpty()) {</b>
+&nbsp;            // Se non ci sono varianti, non possiamo creare un JSON valido
+&nbsp;            // per questo prodotto. Restituisci null.
+<b class="fc">&nbsp;            return null;</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        JSONObject jsonObject = new JSONObject();</b>
+<b class="fc">&nbsp;        jsonObject.put(&quot;id&quot;, p.getIdProdotto());</b>
+<b class="fc">&nbsp;        jsonObject.put(&quot;nome&quot;, p.getNome());</b>
+<b class="fc">&nbsp;        jsonObject.put(&quot;categoria&quot;, p.getCategoria());</b>
+<b class="fc">&nbsp;        jsonObject.put(&quot;calorie&quot;, p.getCalorie());</b>
+<b class="fc">&nbsp;        jsonObject.put(&quot;immagine&quot;, p.getImmagine());</b>
+&nbsp;
+&nbsp;        // 2. Ora la chiamata a .get(0) è sicura
+<b class="fc">&nbsp;        Variante variante = varianti.get(0);</b>
+<b class="fc">&nbsp;        jsonObject.put(&quot;idVariante&quot;, variante.getIdVariante());</b>
+<b class="pc">&nbsp;        if (variante.getSconto() &gt; 0){</b>
+<b class="nc">&nbsp;            jsonObject.put(&quot;sconto&quot;, variante.getSconto());</b>
+&nbsp;        }
+<b class="fc">&nbsp;        jsonObject.put(&quot;prezzo&quot;, variante.getPrezzo());</b>
+<b class="fc">&nbsp;        jsonObject.put(&quot;gusto&quot;, variante.getGusto());</b>
+<b class="fc">&nbsp;        jsonObject.put(&quot;peso&quot;, variante.getPesoConfezione());</b>
+&nbsp;
+<b class="fc">&nbsp;        return jsonObject;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;
+&nbsp;
+&nbsp;
+&nbsp;    @Override
+&nbsp;    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+<b class="fc">&nbsp;        doGet(req, resp);</b>
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2025-11-17 10:45</div>
+</div>
+</body>
+</html>

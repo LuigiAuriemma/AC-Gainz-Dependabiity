@@ -1,0 +1,154 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > Confezione</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">model</a>
+</div>
+
+<h1>Coverage Summary for Class: Confezione (model)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Confezione</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/5)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package model;
+&nbsp;
+&nbsp;public class Confezione {
+&nbsp;
+&nbsp;    //@ spec_public
+&nbsp;    private int idConfezione;
+&nbsp;    //@ spec_public
+&nbsp;    private int peso;
+&nbsp;
+&nbsp;    // --- AGGIUNGI QUESTO BLOCCO ---
+&nbsp;    /*@
+&nbsp;        assignable \nothing;
+&nbsp;        ensures idConfezione == 0;
+&nbsp;        ensures peso == 0;
+&nbsp;     @*/
+<b class="nc">&nbsp;    public Confezione() {}</b>
+&nbsp;
+&nbsp;    /*@
+&nbsp;    @ ensures \result == this.idConfezione;
+&nbsp;    @ pure
+&nbsp;    @*/
+&nbsp;    public int getIdConfezione() {
+<b class="nc">&nbsp;        return idConfezione;</b>
+&nbsp;    }
+&nbsp;    /*@
+&nbsp;    @   requires idConfezione &gt; 0;
+&nbsp;    @   assignable this.idConfezione;
+&nbsp;    @   ensures this.idConfezione == idConfezione;
+&nbsp;    @*/
+&nbsp;    public void setIdConfezione(int idConfezione) {
+<b class="nc">&nbsp;        this.idConfezione = idConfezione;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;
+&nbsp;    /*@
+&nbsp;    @ ensures \result == this.peso;
+&nbsp;    @ pure
+&nbsp;    @*/
+&nbsp;    public int getPeso() {
+<b class="nc">&nbsp;        return peso;</b>
+&nbsp;    }
+&nbsp;    /*@
+&nbsp;    @   requires peso &gt; 0;
+&nbsp;    @   assignable this.peso;
+&nbsp;    @   ensures this.peso == peso;
+&nbsp;    @*/
+&nbsp;    public void setPeso(int peso) {
+<b class="nc">&nbsp;        this.peso = peso;</b>
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2025-11-17 10:45</div>
+</div>
+</body>
+</html>
