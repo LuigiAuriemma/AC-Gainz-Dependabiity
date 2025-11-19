@@ -10,6 +10,11 @@
     </error-page>
 
     <error-page>
+        <error-code>400</error-code>
+        <location>/WEB-INF/results/errorBadRequest.jsp</location>
+    </error-page>
+
+    <error-page>
         <error-code>404</error-code>
         <location>/WEB-INF/results/errorNotFound.jsp</location>
     </error-page>
