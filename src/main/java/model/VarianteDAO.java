@@ -436,6 +436,4 @@ public class VarianteDAO {
             throw new RuntimeException(e);
         }
     }
-
-
 }

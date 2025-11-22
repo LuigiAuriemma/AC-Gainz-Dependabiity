@@ -180,9 +180,9 @@ public class UtenteDAO {
 
             switch (attributeToUpdate){
                 case "dataDiNascita" ->{
-                    SimpleDateFormat simpleDateFormat = new SimpleDateFormat("AAAA-MM-dd");
+                    SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd");
                     Date d = simpleDateFormat.parse(value);
-                    preparedStatement.setDate(1, (java.sql.Date) d);
+                    preparedStatement.setDate(1, new java.sql.Date(d.getTime()));
                 }
                 case "poteri" ->{
                     if(value.equals("true")){

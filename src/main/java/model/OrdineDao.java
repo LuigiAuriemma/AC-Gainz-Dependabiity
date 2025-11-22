@@ -196,8 +196,6 @@ public class OrdineDao {
 
             int rows = preparedStatement.executeUpdate();
 
-
-
         }catch (SQLException e){
             throw new RuntimeException(e);
         }

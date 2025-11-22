@@ -160,10 +160,6 @@ public class ProdottoDAO {
     }
 
 
-
-
-
-
     public void doSave(Prodotto prodotto) {
         try (Connection con = ConPool.getConnection()) {
             PreparedStatement ps = con.prepareStatement(

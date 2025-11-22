@@ -70,7 +70,6 @@ public class ConfezioneDAO {
         return confezioni;
     }
 
-
     /*@
     @   requires confezione != null;
     @   signals (RuntimeException e) true;
@@ -140,6 +139,5 @@ public class ConfezioneDAO {
             throw new RuntimeException(e);
         }
     }
-
 }
 

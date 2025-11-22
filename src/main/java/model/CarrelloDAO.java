@@ -72,9 +72,6 @@ public class CarrelloDAO {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
-
         return carrelli;
     }
-
-
 }

@@ -145,10 +145,6 @@
                     <targetTests>
                         <param>*Test</param>
                     </targetTests>
-                    <excludedClasses>
-                        <param>com.example.util.*</param>
-                        <param>com.example.generated.*</param>
-                    </excludedClasses>
                     <outputFormats>
                         <param>HTML</param>
                     </outputFormats>

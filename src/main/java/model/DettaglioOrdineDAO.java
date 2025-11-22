@@ -170,9 +170,4 @@ public class DettaglioOrdineDAO {
             throw new RuntimeException(e);
         }
     }
-
-
-
-
-
 }
