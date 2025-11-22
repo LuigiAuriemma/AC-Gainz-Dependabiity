@@ -141,7 +141,6 @@ public class insertRowServlet extends HttpServlet {
             // Se il file non è stato inviato o è vuoto, non possiamo inserire il prodotto
             return false;
         }
-
         //Per l'immagine
         String fileName = Paths.get(filePart.getSubmittedFileName()).getFileName().toString();
         String destinazione = CARTELLA_UPLOAD + "/" + fileName;
@@ -162,29 +161,24 @@ public class insertRowServlet extends HttpServlet {
         String grassi = req.getParameter("grassi");
 
         if (isValid(List.of(idProdotto, nome, descrizione, categoria, calorie, carboidrati, proteine, grassi))) {
-            try {
-                Prodotto p = new Prodotto();
-                p.setIdProdotto(idProdotto);
-                p.setNome(nome);
-                p.setDescrizione(descrizione);
-                p.setCategoria(categoria);
-                p.setImmagine(destinazione);
-                p.setCalorie(Integer.parseInt(calorie));
-                p.setCarboidrati(Integer.parseInt(carboidrati));
-                p.setProteine(Integer.parseInt(proteine));
-                p.setGrassi(Integer.parseInt(grassi));
+            Prodotto p = new Prodotto();
+            p.setIdProdotto(idProdotto);
+            p.setNome(nome);
+            p.setDescrizione(descrizione);
+            p.setCategoria(categoria);
+            p.setImmagine(destinazione);
+            p.setCalorie(Integer.parseInt(calorie));
+            p.setCarboidrati(Integer.parseInt(carboidrati));
+            p.setProteine(Integer.parseInt(proteine));
+            p.setGrassi(Integer.parseInt(grassi));
 
-                ProdottoDAO prodottoDAO = new ProdottoDAO();
-                prodottoDAO.doSave(p);
-                return true;
-            } catch (NumberFormatException e) {
-                // Se un parametro non è un numero, cattura l'errore
-                e.printStackTrace(); // Logga l'errore per il debug
-                return false; // Restituisce 'false' per far scattare l'errore 500
-            }
+            ProdottoDAO prodottoDAO = new ProdottoDAO();
+            prodottoDAO.doSave(p);
+            return true;
         }
         return false;
     }
+
 
 
     //prende i parametri dalla request,controlla che siano validi,
