@@ -17,7 +17,8 @@ public class Confezione {
         return idConfezione;
     }
     
-    /*@ 
+    /*@
+    @ requires idConfezione > 0; 
     @ ensures this.idConfezione == idConfezione;
     @ assignable this.idConfezione; 
     @*/
@@ -35,6 +36,7 @@ public class Confezione {
     }
     
     /*@ 
+    @ requires peso > 0;
     @ ensures this.peso == peso;
     @ assignable this.peso; 
     @*/
