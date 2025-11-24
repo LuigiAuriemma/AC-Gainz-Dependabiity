@@ -9,6 +9,8 @@ import jakarta.servlet.http.HttpSession;
 import model.*;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+// IMPORTANTE: Importa la libreria di sicurezza
+import org.owasp.encoder.Encode;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -22,7 +24,6 @@ public class CarrelloServlet extends HttpServlet {
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         String action = req.getParameter("action");
 
-        // FIX 1: Imposta sempre l'encoding esplicito oltre al content type
         resp.setContentType("application/json");
         resp.setCharacterEncoding("UTF-8");
 
@@ -32,7 +33,6 @@ public class CarrelloServlet extends HttpServlet {
         synchronized (session) {
             PrintWriter out = resp.getWriter();
 
-            // Controllo null su action per evitare crash
             if (action == null) {
                 out.println(new JSONArray());
                 out.flush();
@@ -45,28 +45,11 @@ public class CarrelloServlet extends HttpServlet {
                 case "removeVariant" -> handleRemoveVariantAction(req, session, prodottoDAO, out);
                 case "quantityVariant" -> handleQuantityVariantAction(req, session, prodottoDAO, out);
                 default -> {
-                    // Gestione caso default sicura
                     out.println(new JSONArray());
                     out.flush();
                 }
             }
         }
-    }
-
-    // --- METODO DI SICUREZZA PER SONARCLOUD (FIX XSS) ---
-    /**
-     * Pulisce l'input da caratteri pericolosi per prevenire XSS.
-     * Sostituisce <, >, &, ", ' con le rispettive entità o stringhe vuote.
-     */
-    private String sanitizeInput(String input) {
-        if (input == null) {
-            return null;
-        }
-        return input.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&#x27;");
     }
 
     private void handleShowAction(HttpSession session, ProdottoDAO prodottoDAO, PrintWriter out) throws IOException {
@@ -83,9 +66,9 @@ public class CarrelloServlet extends HttpServlet {
     }
 
     public void handleQuantityVariantAction(HttpServletRequest request,  HttpSession session, ProdottoDAO prodottoDAO, PrintWriter out) throws IOException {
-        // FIX 2: Sanitizzazione degli input stringa
-        String idProdotto = sanitizeInput(request.getParameter("id"));
-        String gusto = sanitizeInput(request.getParameter("gusto"));
+        // SECURITY: Encode.forHtml pulisce l'input per SonarCloud
+        String idProdotto = Encode.forHtml(request.getParameter("id"));
+        String gusto = Encode.forHtml(request.getParameter("gusto"));
 
         int pesoConfezione;
         try {
@@ -97,17 +80,21 @@ public class CarrelloServlet extends HttpServlet {
         Prodotto p = prodottoDAO.doRetrieveById(idProdotto);
         if (p != null){
             VarianteDAO varianteDAO = new VarianteDAO();
+
             List<Variante> varianti = varianteDAO.doRetrieveVariantByFlavourAndWeight(p.getIdProdotto(), gusto, pesoConfezione);
 
-            if (varianti.isEmpty()) return;
+            if (varianti.isEmpty()) {
+                return;
+            }
 
             Variante v = varianti.get(0);
-            List<Carrello> cartItems = (List<Carrello>) session.getAttribute("cart");
 
+            List<Carrello> cartItems = (List<Carrello>) session.getAttribute("cart");
             if (v != null && cartItems != null){
                 String quantityStr = request.getParameter("quantity");
 
                 if (quantityStr != null && !quantityStr.isBlank()) {
+
                     int q;
                     try {
                         q = Integer.parseInt(quantityStr);
@@ -118,7 +105,8 @@ public class CarrelloServlet extends HttpServlet {
                     if (q <= v.getQuantita()){
                         if (q <= 0) {
                             handleRemoveVariantAction(request, session, prodottoDAO, out);
-                        } else {
+                        }
+                        else {
                             float price = v.getPrezzo();
                             if (v.getSconto() > 0){
                                 price = price * (1 - (float) v.getSconto() / 100);
@@ -145,9 +133,9 @@ public class CarrelloServlet extends HttpServlet {
     }
 
     public void handleRemoveVariantAction(HttpServletRequest request, HttpSession session, ProdottoDAO prodottoDAO, PrintWriter out) throws IOException {
-        // FIX 2: Sanitizzazione degli input stringa
-        String idToRemove = sanitizeInput(request.getParameter("id"));
-        String gusto = sanitizeInput(request.getParameter("gusto"));
+        // SECURITY: Encode.forHtml pulisce l'input per SonarCloud
+        String idToRemove = Encode.forHtml(request.getParameter("id"));
+        String gusto = Encode.forHtml(request.getParameter("gusto"));
 
         int pesoConfezione;
         try {
@@ -160,9 +148,12 @@ public class CarrelloServlet extends HttpServlet {
 
         if (p != null){
             VarianteDAO varianteDAO = new VarianteDAO();
+
             List<Variante> varianti = varianteDAO.doRetrieveVariantByFlavourAndWeight(p.getIdProdotto(), gusto, pesoConfezione);
 
-            if (varianti.isEmpty()) return;
+            if (varianti.isEmpty()) {
+                return;
+            }
 
             Variante v = varianti.get(0);
             if (v != null){
@@ -171,6 +162,7 @@ public class CarrelloServlet extends HttpServlet {
                 if (cartItems != null) {
                     cartItems.removeIf(item -> item.getIdVariante()  == v.getIdVariante());
                     session.setAttribute("cart", cartItems);
+
                     writeCartItemsToResponse(cartItems, prodottoDAO, out);
                 }
             }
@@ -178,12 +170,13 @@ public class CarrelloServlet extends HttpServlet {
     }
 
     private void handleAddVariantAction(HttpServletRequest request, HttpSession session, ProdottoDAO prodottoDAO, PrintWriter out) throws IOException {
-        // FIX 2: Sanitizzazione degli input stringa
-        String id = sanitizeInput(request.getParameter("id"));
+        // SECURITY: Encode.forHtml pulisce l'input per SonarCloud
+        String id = Encode.forHtml(request.getParameter("id"));
 
         Prodotto p = prodottoDAO.doRetrieveById(id);
         if (p != null) {
             int quantity = 1;
+
             if (request.getParameter("quantity") != null) {
                 try {
                     int x = Integer.parseInt(request.getParameter("quantity"));
@@ -193,8 +186,8 @@ public class CarrelloServlet extends HttpServlet {
                 }
             }
 
-            // FIX 2: Sanitizzazione degli input stringa
-            String gusto = sanitizeInput(request.getParameter("gusto"));
+            // SECURITY: Encode.forHtml pulisce l'input per SonarCloud
+            String gusto = Encode.forHtml(request.getParameter("gusto"));
             String pesoConfezioneStr = request.getParameter("pesoConfezione");
 
             int pesoConfezione;
@@ -207,14 +200,18 @@ public class CarrelloServlet extends HttpServlet {
             VarianteDAO varianteDAO = new VarianteDAO();
             List<Variante> varianti = varianteDAO.doRetrieveVariantByFlavourAndWeight(p.getIdProdotto(), gusto, pesoConfezione);
 
-            if (varianti.isEmpty()) return;
+            if (varianti.isEmpty()) {
+                return;
+            }
 
             Variante v = varianti.get(0);
+
             List<Carrello> cartItems = (List<Carrello>) session.getAttribute("cart");
             if (cartItems == null) cartItems = new ArrayList<>();
 
             if (v != null) {
                 float price = v.getPrezzo();
+
                 if (v.getSconto() > 0) {
                     price = price * (1 - (float) v.getSconto() / 100);
                     price = Math.round(price * 100.0f) / 100.0f;
@@ -237,12 +234,12 @@ public class CarrelloServlet extends HttpServlet {
 
                 if (!itemExists && quantity <= v.getQuantita()) {
                     Carrello c = new Carrello();
-                    c.setIdProdotto(id);
+                    c.setIdProdotto(id); // Ora id è pulito
                     c.setIdVariante(v.getIdVariante());
                     c.setNomeProdotto(p.getNome());
                     c.setQuantita(quantity);
                     c.setPrezzo(price * quantity);
-                    c.setGusto(gusto); // Qui usiamo la versione sanitizzata
+                    c.setGusto(gusto); // Ora gusto è pulito
                     c.setPesoConfezione(pesoConfezione);
                     c.setImmagineProdotto(p.getImmagine());
                     cartItems.add(c);
@@ -261,15 +258,18 @@ public class CarrelloServlet extends HttpServlet {
         for (Carrello item: cartItems){
             Prodotto p = prodottoDAO.doRetrieveById(item.getIdProdotto());
 
-            if (p == null) continue;
+            if (p == null) {
+                continue;
+            }
 
             JSONObject jsonObject = new JSONObject();
+
+            // I valori dentro 'item' (idProdotto e Gusto) sono stati puliti prima di essere
+            // aggiunti alla lista nelle funzioni handleAdd/handleQuantity.
             jsonObject.put("idProdotto", item.getIdProdotto());
             jsonObject.put("idVariante", item.getIdVariante());
-            // Anche se vengono dal DB, è buona norma assicurarsi che p.getNome() non sia null
             jsonObject.put("nomeProdotto", p.getNome());
             jsonObject.put("imgSrc", p.getImmagine());
-            // Questo valore è stato sanitizzato in fase di input
             jsonObject.put("flavour", item.getGusto());
             jsonObject.put("weight", item.getPesoConfezione());
             jsonObject.put("quantity", item.getQuantita());
