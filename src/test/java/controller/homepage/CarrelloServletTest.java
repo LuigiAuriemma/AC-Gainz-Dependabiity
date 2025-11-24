@@ -111,13 +111,14 @@ public class CarrelloServletTest {
     }
 
     @Test
-    @DisplayName("Action non valida -> Non fa nulla")
-    void invalidAction_doesNothing() throws ServletException, IOException {
+    @DisplayName("Action non valida -> Restituisce []")
+    void invalidAction_returnsEmptyJson() throws ServletException, IOException {
         when(request.getParameter("action")).thenReturn("azione-sbagliata");
-        servlet.doGet(request, response);
-        assertTrue(getJsonOutput().isEmpty());
-    }
 
+        servlet.doGet(request, response);
+
+        assertEquals("[]", getJsonOutput());
+    }
     // --- Test 2: action="show" ---
 
     @Nested
