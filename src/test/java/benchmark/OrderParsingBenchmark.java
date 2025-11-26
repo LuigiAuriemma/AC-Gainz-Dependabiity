@@ -42,8 +42,7 @@ public class OrderParsingBenchmark {
     }
 
     // --- TEST DELLA TUA LOGICA DI PARSING ---
-    // Abbiamo copiato il metodo 'parseDescrizione' qui perché nella Servlet è private
-    // e non potremmo chiamarlo direttamente.
+    // Abbiamo copiato il metodo 'parseDescrizione' qui perché nella Servlet
     @Benchmark
     public List<DettaglioOrdine> testOrderParsing() {
         List<DettaglioOrdine> dettagli = new ArrayList<>();

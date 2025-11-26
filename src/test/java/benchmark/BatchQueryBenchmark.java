@@ -39,8 +39,6 @@ public class BatchQueryBenchmark {
             // 1. Costruiamo la query singola (CPU)
             String sql = "INSERT INTO carrello (id_utente, id_prodotto) VALUES (1, '" + item + "')";
 
-            // 2. Simuliamo l'invio al DB (Latenza)
-            simulateDbCall();
 
             processed++;
         }
@@ -60,19 +58,8 @@ public class BatchQueryBenchmark {
             }
         }
 
-        // 2. Simuliamo l'invio al DB (Latenza pagata una sola volta)
-        simulateDbCall();
-
         return 1;
     }
-
-    // Metodo helper per simulare il "Cost of Doing Business" con un Database
-    // Usa blackhole.consumeCPU in scenari reali, ma qui Thread.sleep nanos è ok per la demo
-    private void simulateDbCall() {
-        // Busy-wait per simulare lavoro/attesa senza bloccare il thread OS troppo a lungo
-        long start = System.nanoTime();
-        while (System.nanoTime() - start < SIMULATED_DB_LATENCY_NS) {
-            // busy loop
-        }
-    }
 }
+
+

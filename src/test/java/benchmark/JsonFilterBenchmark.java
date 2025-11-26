@@ -49,7 +49,7 @@ public class JsonFilterBenchmark {
         p.setCalorie(150);
         p.setImmagine("img/test.jpg");
 
-        // Importante: Il tuo metodo getJsonObject accede a p.getVarianti().get(0)
+        // Importante: il metodo getJsonObject accede a p.getVarianti().get(0)
         // Dobbiamo assicurarci che esistano le varianti per evitare NullPointerException nel benchmark
         List<Variante> varianti = new ArrayList<>();
         Variante v = new Variante();
@@ -74,8 +74,7 @@ public class JsonFilterBenchmark {
     // --- BENCHMARK 2: Conversione Lista (Scenario Reale) ---
     @Benchmark
     public JSONArray testListJsonConversion() {
-        // Simuliamo la logica che hai dentro 'sendJsonResponse'
-        // Escludiamo solo la parte 'out.println' (I/O) per testare la pura CPU
+        // Simulo la logica che ho dentro 'sendJsonResponse'
         JSONArray jsonArray = new JSONArray();
 
         for (Prodotto p : listaProdotti) {
