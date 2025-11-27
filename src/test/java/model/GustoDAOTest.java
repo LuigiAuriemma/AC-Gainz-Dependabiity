@@ -50,7 +50,8 @@ class GustoDAOTest {
 
     @Test
     void doRetrieveById_NotFound_ReturnsEmptyObject() throws SQLException {
-        // Nota: Il tuo DAO restituisce new Gusto() (vuoto) se non trova nulla, NON null.
+        // Nota: Il tuo DAO restituisce new Gusto() (vuoto) se non trova nulla, NON
+        // null.
         try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
             mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
             when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
@@ -76,21 +77,25 @@ class GustoDAOTest {
 
             when(mockResultSet.next()).thenReturn(true);
             when(mockResultSet.getInt("id_gusto")).thenReturn(10);
-            // ATTENZIONE: Il tuo codice chiama rs.getString("nome") anche se la query seleziona "nomeGusto"
+            // ATTENZIONE: Il tuo codice chiama rs.getString("nome") anche se la query
+            // seleziona "nomeGusto"
             // Simulo il comportamento del codice Java:
             when(mockResultSet.getString("nome")).thenReturn("Vaniglia");
 
             Gusto result = gustoDAO.doRetrieveByIdVariante(idVariante);
 
             assertNotNull(result);
-            assertEquals("Vaniglia", result.getNomeGusto()); // Nota: il getter è getNome ma nel DAO setti setNome(rs.getString("nome"))? Verifica i getter/setter del bean Gusto
+            assertEquals("Vaniglia", result.getNomeGusto()); // Nota: il getter è getNome ma nel DAO setti
+                                                             // setNome(rs.getString("nome"))? Verifica i getter/setter
+                                                             // del bean Gusto
             // Assumendo che il bean abbia getNome() o getNomeGusto()
         }
     }
 
     @Test
     void doRetrieveByIdVariante_NotFound_ReturnsNull() throws SQLException {
-        // Nota: Questo metodo restituisce NULL se non trova nulla (diverso da doRetrieveById)
+        // Nota: Questo metodo restituisce NULL se non trova nulla (diverso da
+        // doRetrieveById)
         try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
             mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
             when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
@@ -205,6 +210,98 @@ class GustoDAOTest {
             gustoDAO.doRemoveGusto(5);
 
             verify(mockPreparedStatement).setInt(1, 5);
+            verify(mockPreparedStatement).executeUpdate();
+        }
+    }
+
+    // --- NEW TESTS ---
+
+    @Test
+    void doRetrieveById_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> gustoDAO.doRetrieveById(1));
+        }
+    }
+
+    @Test
+    void doRetrieveByIdVariante_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> gustoDAO.doRetrieveByIdVariante(1));
+        }
+    }
+
+    @Test
+    void doRetrieveAll_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> gustoDAO.doRetrieveAll());
+        }
+    }
+
+    @Test
+    void updateGusto_SQLException() throws SQLException {
+        Gusto g = new Gusto();
+        g.setIdGusto(1);
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> gustoDAO.updateGusto(g, 1));
+        }
+    }
+
+    @Test
+    void doSaveGusto_SQLException() throws SQLException {
+        Gusto g = new Gusto();
+        g.setNome("Test");
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            // doSaveGusto catches SQLException and prints stack trace, does NOT throw
+            // RuntimeException
+            // So we verify it doesn't throw exception
+            assertDoesNotThrow(() -> gustoDAO.doSaveGusto(g));
+        }
+    }
+
+    @Test
+    void doRemoveGusto_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> gustoDAO.doRemoveGusto(1));
+        }
+    }
+
+    @Test
+    void doSaveGusto_NoFields() throws SQLException {
+        Gusto g = new Gusto(); // id=0, nome=null
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+
+            ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+            when(mockConnection.prepareStatement(sqlCaptor.capture())).thenReturn(mockPreparedStatement);
+
+            gustoDAO.doSaveGusto(g);
+
+            String sql = sqlCaptor.getValue();
+            // Should be INSERT INTO gusto () VALUES () which might be invalid SQL but
+            // that's what the code generates
+            // Or maybe it handles empty lists?
+            // The code loops over parameters. If empty, it produces "INSERT INTO gusto ()
+            // VALUES ()"
+
+            assertTrue(sql.contains("INSERT INTO gusto"));
             verify(mockPreparedStatement).executeUpdate();
         }
     }

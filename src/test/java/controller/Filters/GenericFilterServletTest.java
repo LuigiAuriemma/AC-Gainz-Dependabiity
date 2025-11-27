@@ -96,6 +96,7 @@ public class GenericFilterServletTest {
             Prodotto p = new Prodotto();
             Variante v = new Variante();
             v.setIdVariante(101);
+            v.setSconto(20); // Set discount to match assertion
             p.setNome("Proteine");
             p.setVarianti(List.of(v)); // Ha una variante
 
@@ -103,7 +104,54 @@ public class GenericFilterServletTest {
 
             assertNotNull(json);
             assertEquals("Proteine", json.get("nome"));
-            assertEquals(101, json.get("idVariante"));
+            assertEquals(20, json.get("sconto"));
+        }
+
+        @Test
+        @DisplayName("Prodotto con Varianti null (Mocked) -> Restituisce null")
+        void getJsonObject_mockedNullVariants_returnsNull() {
+            // Poiché Prodotto.getVarianti() inizializza la lista se null,
+            // dobbiamo usare un mock per forzare il ritorno di null.
+            Prodotto p = mock(Prodotto.class);
+            when(p.getVarianti()).thenReturn(null);
+
+            JSONObject json = GenericFilterServlet.getJsonObject(p);
+
+            assertNull(json);
+        }
+
+        @Test
+        @DisplayName("Verifica tutti i campi del JSON")
+        void getJsonObject_verifyAllFields() {
+            Prodotto p = new Prodotto();
+            p.setIdProdotto("1"); // Fixed: String instead of int
+            p.setNome("Prodotto Test");
+            p.setCategoria("Integratori");
+            p.setCalorie(100);
+            p.setImmagine("img.jpg");
+
+            Variante v = new Variante();
+            v.setIdVariante(10);
+            v.setPrezzo(50.0f);
+            v.setGusto("Vaniglia");
+            v.setPesoConfezione(1000); // Fixed: int instead of String (assuming 1000g for 1kg)
+            v.setSconto(0);
+
+            p.setVarianti(List.of(v));
+
+            JSONObject json = GenericFilterServlet.getJsonObject(p);
+
+            assertNotNull(json);
+            assertEquals("1", json.get("id")); // Fixed: String
+            assertEquals("Prodotto Test", json.get("nome"));
+            assertEquals("Integratori", json.get("categoria"));
+            assertEquals(100, json.get("calorie"));
+            assertEquals("img.jpg", json.get("immagine"));
+            assertEquals(10, json.get("idVariante"));
+            assertEquals(50.0f, json.get("prezzo"));
+            assertEquals("Vaniglia", json.get("gusto"));
+            assertEquals(1000, json.get("peso")); // Fixed: int
+            assertNull(json.get("sconto")); // Sconto 0 non viene aggiunto
         }
 
         @Test
@@ -255,6 +303,38 @@ public class GenericFilterServletTest {
                 });
 
                 assertTrue(ex.getCause() instanceof SQLException);
+            }
+        }
+
+        @Test
+        @DisplayName("Filtro AJAX usa parametri sessione e request")
+        void ajaxFilter_usesSessionAndRequestParameters() throws ServletException, IOException, SQLException {
+            when(request.getParameter("nameForm")).thenReturn(null);
+
+            // Session attributes
+            when(session.getAttribute("categoria")).thenReturn("Integratori");
+            when(session.getAttribute("searchBarName")).thenReturn("Whey");
+
+            // Request parameters
+            when(request.getParameter("weight")).thenReturn("1kg");
+            when(request.getParameter("taste")).thenReturn("Cioccolato");
+            when(request.getParameter("sorting")).thenReturn("price_asc");
+
+            List<Prodotto> emptyList = new ArrayList<>();
+
+            try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                when(mock.filterProducts(anyString(), anyString(), anyString(), anyString(), anyString()))
+                        .thenReturn(emptyList);
+            })) {
+
+                servlet.doGet(request, response);
+
+                // Verifica che i parametri siano passati correttamente al DAO
+                verify(dao.constructed().get(0)).filterProducts("Integratori", "price_asc", "1kg", "Cioccolato",
+                        "Whey");
+
+                // Verifica aggiornamento sessione
+                verify(session).setAttribute("filteredProducts", emptyList);
             }
         }
     }

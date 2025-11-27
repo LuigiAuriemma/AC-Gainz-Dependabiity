@@ -21,7 +21,7 @@ import static controller.Admin.showRowForm.*;
 public class deleteRowServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        //prendiamo i dati dalla request
+        // prendiamo i dati dalla request
         String tableName = req.getParameter("tableName");
         String primaryKey = req.getParameter("primaryKey");
         Utente utente = (Utente) req.getSession().getAttribute("Utente");
@@ -46,11 +46,9 @@ public class deleteRowServlet extends HttpServlet {
             default -> false;
         };
 
-
         if (success && tableName.equals("utente")) {
             isTheSame = checkIfAdminDeletingSelf(primaryKey, utente);
         }
-
 
         if (isTheSame) {
             req.getSession(false).invalidate();
@@ -69,9 +67,8 @@ public class deleteRowServlet extends HttpServlet {
         }
     }
 
-
     private boolean checkIfAdminDeletingSelf(String primaryKey, Utente utente) {
-        System.out.println("Checking if admin is deleting self");  // Log per debug
+        System.out.println("Checking if admin is deleting self"); // Log per debug
 
         // Controlla prima che 'utente' non sia nullo
         if (utente == null || primaryKey == null || primaryKey.isBlank()) {
@@ -80,9 +77,6 @@ public class deleteRowServlet extends HttpServlet {
 
         return utente.getEmail().equals(primaryKey);
     }
-
-
-
 
     private boolean handleRemoveRowFromConfezione(String primaryKey) {
         ConfezioneDAO confezioneDAO = new ConfezioneDAO();
@@ -104,7 +98,8 @@ public class deleteRowServlet extends HttpServlet {
         return false;
     }
 
-    //metodo che rimuove la tupla dalla tabella dettaglio ordine(presenta 2 chiavi primarie)
+    // metodo che rimuove la tupla dalla tabella dettaglio ordine(presenta 2 chiavi
+    // primarie)
     private boolean handleRemoveRowFromDettaglioOrdine(String primaryKey) {
         if (primaryKey == null || primaryKey.isBlank()) {
             return false;
@@ -144,8 +139,8 @@ public class deleteRowServlet extends HttpServlet {
             Variante v = varianteDAO.doRetrieveVarianteByIdVariante(Integer.parseInt(primaryKey));
             if (v != null) {
                 varianteDAO.doRemoveVariante(Integer.parseInt(primaryKey));
+                return true;
             }
-            return true;
         }
         return false;
     }
@@ -166,7 +161,7 @@ public class deleteRowServlet extends HttpServlet {
         return false; // Fallimento (prodotto non trovato)
     }
 
-    private boolean handleRemoveRowFromUtente(String primaryKey){
+    private boolean handleRemoveRowFromUtente(String primaryKey) {
         if (primaryKey != null && !primaryKey.isBlank()) {
             UtenteDAO utenteDAO = new UtenteDAO();
             Utente u = utenteDAO.doRetrieveByEmail(primaryKey);
@@ -178,7 +173,8 @@ public class deleteRowServlet extends HttpServlet {
         return false;
     }
 
-    //metodo che in base a tableName prende tutte le tuple e le inserisce in un JSONArray
+    // metodo che in base a tableName prende tutte le tuple e le inserisce in un
+    // JSONArray
     private JSONArray getJsonArrayForTable(String tableName) {
         return switch (tableName) {
             case "utente" -> getAllUtentiJsonArray(new UtenteDAO());
@@ -274,8 +270,7 @@ public class deleteRowServlet extends HttpServlet {
         }
     }
 
-
-    //metodo che crea un oggetto JSON dell'utente
+    // metodo che crea un oggetto JSON dell'utente
     protected static JSONObject jsonHelperHere(Utente x) {
         JSONObject userObject = new JSONObject();
         userObject.put("email", x.getEmail());

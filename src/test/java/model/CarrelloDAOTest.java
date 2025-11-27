@@ -79,7 +79,8 @@ class CarrelloDAOTest {
         try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
             mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
             // Usiamo contains perché la query è molto lunga e contiene JOIN
-            when(mockConnection.prepareStatement(contains("SELECT * FROM carrello join variante"))).thenReturn(mockPreparedStatement);
+            when(mockConnection.prepareStatement(contains("SELECT * FROM carrello join variante")))
+                    .thenReturn(mockPreparedStatement);
             when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
 
             // Simuliamo 1 prodotto nel carrello
@@ -145,6 +146,42 @@ class CarrelloDAOTest {
             assertThrows(RuntimeException.class, () -> {
                 carrelloDAO.doSave(new Carrello());
             });
+        }
+    }
+
+    // --- NEW TESTS ---
+
+    @Test
+    void doRemoveCartByUser_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> carrelloDAO.doRemoveCartByUser("email"));
+        }
+    }
+
+    @Test
+    void doRetrieveCartItemsByUser_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> carrelloDAO.doRetrieveCartItemsByUser("email"));
+        }
+    }
+
+    @Test
+    void doRemoveCartByUser_NoDelete() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeUpdate()).thenReturn(0);
+
+            // Should not throw exception, just print to stdout
+            carrelloDAO.doRemoveCartByUser("nodelete@test.com");
+
+            verify(mockPreparedStatement).executeUpdate();
         }
     }
 }

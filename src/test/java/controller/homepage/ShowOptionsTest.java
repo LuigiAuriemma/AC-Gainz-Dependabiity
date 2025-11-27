@@ -9,6 +9,7 @@ import model.Variante;
 import model.VarianteDAO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedConstruction;
 
@@ -25,7 +26,8 @@ import static org.mockito.Mockito.*;
 
 /**
  * Classe di test per la servlet ShowOptions.
- * Testa le 3 azioni (showFirst, updateOptions, updatePrice) e i percorsi di fallimento.
+ * Testa le 3 azioni (showFirst, updateOptions, updatePrice) e i percorsi di
+ * fallimento.
  * Cattura l'output JSON mockando il PrintWriter.
  */
 public class ShowOptionsTest {
@@ -81,6 +83,31 @@ public class ShowOptionsTest {
         assertTrue(getJsonOutput().isEmpty());
     }
 
+    @Test
+    @DisplayName("Azione sconosciuta con idVariante -> Nessun output")
+    void unknownAction_with_idVariante_doesNothing() throws ServletException, IOException {
+        when(request.getParameter("action")).thenReturn("unknownAction");
+        when(request.getParameter("idVariante")).thenReturn("1");
+
+        servlet.doGet(request, response);
+
+        assertTrue(getJsonOutput().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Azione sconosciuta con TUTTI i parametri -> Nessun output")
+    void unknownAction_with_allParams_doesNothing() throws ServletException, IOException {
+        when(request.getParameter("action")).thenReturn("unknownAction");
+        when(request.getParameter("idVariante")).thenReturn("1");
+        when(request.getParameter("idProdotto")).thenReturn("P1");
+        when(request.getParameter("flavour")).thenReturn("Vaniglia");
+        when(request.getParameter("weight")).thenReturn("500");
+
+        servlet.doGet(request, response);
+
+        assertTrue(getJsonOutput().isEmpty());
+    }
+
     // --- Test 2: action="showFirst" ---
 
     @Test
@@ -90,26 +117,57 @@ public class ShowOptionsTest {
         when(request.getParameter("idVariante")).thenReturn("1");
 
         // 1. Prepariamo i mock
-        Variante vCheapest = new Variante(); // Cioccolato, 900g
-        vCheapest.setIdVariante(1); vCheapest.setGusto("Cioccolato"); vCheapest.setPesoConfezione(900);
-        vCheapest.setPrezzo(50.0f); vCheapest.setSconto(10); vCheapest.setIdProdotto("P1");
+        Variante vCheapest = new Variante(); // Cioccolato, 900g (ID 1)
+        vCheapest.setIdVariante(1);
+        vCheapest.setGusto("Cioccolato");
+        vCheapest.setPesoConfezione(900);
+        vCheapest.setPrezzo(50.0f);
+        vCheapest.setSconto(10);
+        vCheapest.setIdProdotto("P1");
 
         Variante vOtherWeight = new Variante(); // Cioccolato, 500g
-        vOtherWeight.setGusto("Cioccolato"); vOtherWeight.setPesoConfezione(500);
+        vOtherWeight.setGusto("Cioccolato");
+        vOtherWeight.setPesoConfezione(500);
 
-        Variante vOtherFlavour = new Variante(); // Vaniglia, 900g
-        vOtherFlavour.setIdVariante(2); vOtherFlavour.setGusto("Vaniglia");
+        Variante vSameWeight = new Variante(); // Cioccolato, 900g (Stesso peso di vCheapest, deve essere ignorato)
+        vSameWeight.setGusto("Cioccolato");
+        vSameWeight.setPesoConfezione(900);
 
-        Prodotto p = new Prodotto(); p.setIdProdotto("P1"); p.setNome("Proteine");
+        Variante vDuplicateWeight = new Variante(); // Cioccolato, 500g (Duplicato di vOtherWeight, deve essere
+                                                    // ignorato)
+        vDuplicateWeight.setGusto("Cioccolato");
+        vDuplicateWeight.setPesoConfezione(500);
+
+        Variante vOtherFlavour = new Variante(); // Vaniglia, 900g (ID 2)
+        vOtherFlavour.setIdVariante(2);
+        vOtherFlavour.setGusto("Vaniglia");
+
+        Variante vSameFlavour = new Variante(); // Cioccolato, 100g (Stesso gusto di vCheapest, deve essere ignorato
+                                                // nella lista gusti)
+        vSameFlavour.setIdVariante(3);
+        vSameFlavour.setGusto("Cioccolato");
+
+        Variante vDuplicateFlavour = new Variante(); // Vaniglia, 200g (Duplicato di vOtherFlavour, deve essere
+                                                     // ignorato)
+        vDuplicateFlavour.setIdVariante(4);
+        vDuplicateFlavour.setGusto("Vaniglia");
+
+        Prodotto p = new Prodotto();
+        p.setIdProdotto("P1");
+        p.setNome("Proteine");
 
         try (MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
             when(mock.doRetrieveVarianteByIdVariante(1)).thenReturn(vCheapest);
-            when(mock.doRetrieveVariantiByIdProdotto("P1")).thenReturn(List.of(vCheapest, vOtherWeight, vOtherFlavour));
-            when(mock.doRetrieveVariantByCriteria("P1", "flavour", "Cioccolato")).thenReturn(List.of(vCheapest, vOtherWeight));
+            // Lista completa per i gusti: include tutti i casi limite
+            when(mock.doRetrieveVariantiByIdProdotto("P1"))
+                    .thenReturn(List.of(vCheapest, vOtherWeight, vOtherFlavour, vSameFlavour, vDuplicateFlavour));
+            // Lista per i pesi (dello stesso gusto): include duplicati e stesso peso
+            when(mock.doRetrieveVariantByCriteria("P1", "flavour", "Cioccolato"))
+                    .thenReturn(List.of(vCheapest, vOtherWeight, vSameWeight, vDuplicateWeight));
         });
-             MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                 when(mock.doRetrieveById("P1")).thenReturn(p);
-             })) {
+                MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                    when(mock.doRetrieveById("P1")).thenReturn(p);
+                })) {
 
             // 2. Esecuzione
             servlet.doGet(request, response);
@@ -153,14 +211,13 @@ public class ShowOptionsTest {
         try (MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
             when(mock.doRetrieveVarianteByIdVariante(1)).thenReturn(new Variante()); // Trovato
         });
-             MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                 when(mock.doRetrieveById(any())).thenReturn(null); // Non trovato
-             })) {
+                MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                    when(mock.doRetrieveById(any())).thenReturn(null); // Non trovato
+                })) {
             servlet.doGet(request, response);
             assertTrue(getJsonOutput().isEmpty());
         }
     }
-
 
     // --- Test 3: action="updateOptions" ---
 
@@ -172,16 +229,18 @@ public class ShowOptionsTest {
         when(request.getParameter("flavour")).thenReturn("Vaniglia");
 
         // Prepariamo varianti NON ordinate
-        Variante v1 = new Variante(); v1.setPesoConfezione(1000);
-        Variante v2 = new Variante(); v2.setPesoConfezione(500);
+        Variante v1 = new Variante();
+        v1.setPesoConfezione(1000);
+        Variante v2 = new Variante();
+        v2.setPesoConfezione(500);
 
         try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
             when(mock.doRetrieveById("P1")).thenReturn(new Prodotto()); // Serve per non dare NPE
         });
-             MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                 when(mock.doRetrieveVariantByCriteria(any(), eq("flavour"), eq("Vaniglia")))
-                         .thenReturn(List.of(v1, v2)); // Restituisce lista non ordinata
-             })) {
+                MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+                    when(mock.doRetrieveVariantByCriteria(any(), eq("flavour"), eq("Vaniglia")))
+                            .thenReturn(List.of(v1, v2)); // Restituisce lista non ordinata
+                })) {
 
             servlet.doGet(request, response);
             String json = getJsonOutput();
@@ -209,7 +268,6 @@ public class ShowOptionsTest {
         }
     }
 
-
     // --- Test 4: action="updatePrice" ---
 
     @Test
@@ -227,10 +285,10 @@ public class ShowOptionsTest {
         try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
             when(mock.doRetrieveById("P1")).thenReturn(new Prodotto());
         });
-             MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                 when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Vaniglia", 500))
-                         .thenReturn(List.of(v));
-             })) {
+                MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+                    when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Vaniglia", 500))
+                            .thenReturn(List.of(v));
+                })) {
 
             servlet.doGet(request, response);
             String json = getJsonOutput();
@@ -238,7 +296,8 @@ public class ShowOptionsTest {
             // Verifica che il JSON sia un oggetto singolo (non un array)
             // e contenga i dati corretti
             assertTrue(json.contains("\"sconto\":5"));
-            assertTrue(json.contains("\"prezzo\":29.99"));        }
+            assertTrue(json.contains("\"prezzo\":29.99"));
+        }
     }
 
     @Test
@@ -269,16 +328,105 @@ public class ShowOptionsTest {
         try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
             when(mock.doRetrieveById("P1")).thenReturn(new Prodotto());
         });
-             MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                 // Restituisce una LISTA VUOTA
-                 when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Ananas", 500))
-                         .thenReturn(new ArrayList<>());
-             })) {
+                MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+                    // Restituisce una LISTA VUOTA
+                    when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Ananas", 500))
+                            .thenReturn(new ArrayList<>());
+                })) {
 
             // Il codice della servlet (...get(0)) lancerà l'eccezione
             assertThrows(IndexOutOfBoundsException.class, () -> {
                 servlet.doGet(request, response);
             });
+        }
+    }
+
+    @Test
+    @DisplayName("updatePrice con Prodotto non trovato -> Nessun output")
+    void updatePrice_nullProduct_doesNothing() throws ServletException, IOException {
+        when(request.getParameter("action")).thenReturn("updatePrice");
+        when(request.getParameter("idProdotto")).thenReturn("P_NOT_FOUND");
+        when(request.getParameter("flavour")).thenReturn("Vaniglia");
+        when(request.getParameter("weight")).thenReturn("500");
+
+        try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+            when(mock.doRetrieveById("P_NOT_FOUND")).thenReturn(null);
+        })) {
+            servlet.doGet(request, response);
+            assertTrue(getJsonOutput().isEmpty());
+        }
+    }
+
+    @Nested
+    @DisplayName("Test Parametri Mancanti")
+    class MissingParametersTests {
+
+        @Test
+        @DisplayName("showFirst senza idVariante -> Nessun output")
+        void showFirst_missingIdVariante_doesNothing() throws ServletException, IOException {
+            when(request.getParameter("action")).thenReturn("showFirst");
+            when(request.getParameter("idVariante")).thenReturn(null);
+
+            servlet.doGet(request, response);
+            assertTrue(getJsonOutput().isEmpty());
+        }
+
+        @Test
+        @DisplayName("updateOptions senza idProdotto -> Nessun output")
+        void updateOptions_missingIdProdotto_doesNothing() throws ServletException, IOException {
+            when(request.getParameter("action")).thenReturn("updateOptions");
+            when(request.getParameter("idProdotto")).thenReturn(null);
+            when(request.getParameter("flavour")).thenReturn("Vaniglia");
+
+            servlet.doGet(request, response);
+            assertTrue(getJsonOutput().isEmpty());
+        }
+
+        @Test
+        @DisplayName("updateOptions senza flavour -> Nessun output")
+        void updateOptions_missingFlavour_doesNothing() throws ServletException, IOException {
+            when(request.getParameter("action")).thenReturn("updateOptions");
+            when(request.getParameter("idProdotto")).thenReturn("P1");
+            when(request.getParameter("flavour")).thenReturn(null);
+
+            servlet.doGet(request, response);
+            assertTrue(getJsonOutput().isEmpty());
+        }
+
+        @Test
+        @DisplayName("updatePrice senza idProdotto -> Nessun output")
+        void updatePrice_missingIdProdotto_doesNothing() throws ServletException, IOException {
+            when(request.getParameter("action")).thenReturn("updatePrice");
+            when(request.getParameter("idProdotto")).thenReturn(null);
+            when(request.getParameter("flavour")).thenReturn("Vaniglia");
+            when(request.getParameter("weight")).thenReturn("500");
+
+            servlet.doGet(request, response);
+            assertTrue(getJsonOutput().isEmpty());
+        }
+
+        @Test
+        @DisplayName("updatePrice senza flavour -> Nessun output")
+        void updatePrice_missingFlavour_doesNothing() throws ServletException, IOException {
+            when(request.getParameter("action")).thenReturn("updatePrice");
+            when(request.getParameter("idProdotto")).thenReturn("P1");
+            when(request.getParameter("flavour")).thenReturn(null);
+            when(request.getParameter("weight")).thenReturn("500");
+
+            servlet.doGet(request, response);
+            assertTrue(getJsonOutput().isEmpty());
+        }
+
+        @Test
+        @DisplayName("updatePrice senza weight -> Nessun output")
+        void updatePrice_missingWeight_doesNothing() throws ServletException, IOException {
+            when(request.getParameter("action")).thenReturn("updatePrice");
+            when(request.getParameter("idProdotto")).thenReturn("P1");
+            when(request.getParameter("flavour")).thenReturn("Vaniglia");
+            when(request.getParameter("weight")).thenReturn(null);
+
+            servlet.doGet(request, response);
+            assertTrue(getJsonOutput().isEmpty());
         }
     }
 }

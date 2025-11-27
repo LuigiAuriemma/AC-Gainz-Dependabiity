@@ -8,16 +8,15 @@ import java.util.Objects;
 
 public class ProdottoDAO {
 
-    public Prodotto doRetrieveById(String id)
-    {
-        try(Connection con= ConPool.getConnection())
-        {
-            PreparedStatement preparedStatement=con.prepareStatement("SELECT * FROM prodotto WHERE prodotto.id_prodotto = ?");
-            preparedStatement.setString(1,id);
+    public Prodotto doRetrieveById(String id) {
+        try (Connection con = ConPool.getConnection()) {
+            PreparedStatement preparedStatement = con
+                    .prepareStatement("SELECT * FROM prodotto WHERE prodotto.id_prodotto = ?");
+            preparedStatement.setString(1, id);
 
-            ResultSet resultSet=preparedStatement.executeQuery();
+            ResultSet resultSet = preparedStatement.executeQuery();
             List<Variante> varianti = new ArrayList<>();
-            if(resultSet.next()) {
+            if (resultSet.next()) {
                 Prodotto p = new Prodotto();
 
                 p.setIdProdotto(resultSet.getString("id_prodotto"));
@@ -39,20 +38,16 @@ public class ProdottoDAO {
             }
             return null;
 
-        }
-        catch (SQLException sqlException)
-        {
+        } catch (SQLException sqlException) {
             throw new RuntimeException(sqlException);
         }
     }
 
-
-
-    public List<Prodotto> filterProducts(String category, String sortingFilter, String weightFilter, String tasteFilter, String nameFilter) throws SQLException {
+    public List<Prodotto> filterProducts(String category, String sortingFilter, String weightFilter, String tasteFilter,
+            String nameFilter) throws SQLException {
         List<Prodotto> filteredProducts = new ArrayList<>();
         VarianteDAO varianteDAO = new VarianteDAO();
         boolean filterOnEvidence;
-
 
         System.out.println("nameFilterDAO: " + nameFilter);
 
@@ -97,7 +92,7 @@ public class ProdottoDAO {
             throw new RuntimeException(e);
         }
 
-        if (sortingFilter != null){
+        if (sortingFilter != null) {
             filterOnEvidence = sortingFilter.equals("evidence");
         } else {
             filterOnEvidence = false;
@@ -148,7 +143,6 @@ public class ProdottoDAO {
         return variante.getPrezzo() * (1 - variante.getSconto() / 100.0f);
     }
 
-
     private Prodotto extractProductFromResultSet(ResultSet resultSet) throws SQLException {
         Prodotto p = new Prodotto();
         p.setIdProdotto(resultSet.getString("id_prodotto"));
@@ -159,13 +153,12 @@ public class ProdottoDAO {
         return p;
     }
 
-
     public void doSave(Prodotto prodotto) {
         try (Connection con = ConPool.getConnection()) {
             PreparedStatement ps = con.prepareStatement(
                     "INSERT INTO prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES(?,?,?,?,?,?,?,?,?)",
                     Statement.RETURN_GENERATED_KEYS);
-            ps.setString(1,prodotto.getIdProdotto());
+            ps.setString(1, prodotto.getIdProdotto());
             ps.setString(2, prodotto.getNome());
             ps.setString(3, prodotto.getDescrizione());
             ps.setString(4, prodotto.getCategoria());
@@ -175,7 +168,6 @@ public class ProdottoDAO {
             ps.setInt(8, prodotto.getProteine());
             ps.setInt(9, prodotto.getGrassi());
 
-
             if (ps.executeUpdate() != 1) {
                 throw new RuntimeException("INSERT error.");
             }
@@ -184,11 +176,9 @@ public class ProdottoDAO {
         }
     }
 
-
-    public List<Prodotto> doRetrieveByCriteria(String attribute, String value){
-        if(Objects.equals(value, "Tutto"))
-            doRetrieveAll();
-
+    public List<Prodotto> doRetrieveByCriteria(String attribute, String value) {
+        if (Objects.equals(value, "Tutto"))
+            return doRetrieveAll();
 
         ArrayList<Prodotto> prodotti = new ArrayList<>();
 
@@ -197,13 +187,13 @@ public class ProdottoDAO {
 
         Prodotto p;
 
-        try (Connection connection = ConPool.getConnection()){
+        try (Connection connection = ConPool.getConnection()) {
 
-            preparedStatement = connection.prepareStatement("SELECT * FROM prodotto where " + attribute +" = ?");
+            preparedStatement = connection.prepareStatement("SELECT * FROM prodotto where " + attribute + " = ?");
             preparedStatement.setString(1, value);
             resultSet = preparedStatement.executeQuery();
 
-            while (resultSet.next()){
+            while (resultSet.next()) {
                 p = new Prodotto();
                 p.setIdProdotto(resultSet.getString("id_prodotto"));
                 p.setNome(resultSet.getString("nome"));
@@ -215,12 +205,12 @@ public class ProdottoDAO {
                 p.setProteine(resultSet.getInt("proteine"));
                 p.setGrassi(resultSet.getInt("grassi"));
 
-
                 /*
-                VarianteDAO varianteDAO = new VarianteDAO();
-                List<Variante> varianti = varianteDAO.doRetrieveVariantiByIdProdotto(p.getIdProdotto());
-
-                p.setVarianti(varianti);
+                 * VarianteDAO varianteDAO = new VarianteDAO();
+                 * List<Variante> varianti =
+                 * varianteDAO.doRetrieveVariantiByIdProdotto(p.getIdProdotto());
+                 * 
+                 * p.setVarianti(varianti);
                  */
                 VarianteDAO varianteDAO = new VarianteDAO();
                 Variante cheapest = varianteDAO.doRetrieveCheapestVariant(p.getIdProdotto());
@@ -239,9 +229,6 @@ public class ProdottoDAO {
         }
     }
 
-
-
-
     public List<Prodotto> doRetrieveAll() {
 
         ArrayList<Prodotto> prodotti = new ArrayList<>();
@@ -253,12 +240,11 @@ public class ProdottoDAO {
 
             st = con.createStatement();
 
-
             String query = "SELECT * FROM prodotto";
 
             resultSet = st.executeQuery(query);
 
-            while(resultSet.next()) {
+            while (resultSet.next()) {
                 p = new Prodotto();
                 p.setIdProdotto(resultSet.getString("id_prodotto"));
                 p.setNome(resultSet.getString("nome"));
@@ -269,7 +255,6 @@ public class ProdottoDAO {
                 p.setCarboidrati(resultSet.getInt("carboidrati"));
                 p.setProteine(resultSet.getInt("proteine"));
                 p.setGrassi(resultSet.getInt("grassi"));
-
 
                 VarianteDAO varianteDAO = new VarianteDAO();
                 List<Variante> varianti = new ArrayList<>();
@@ -287,9 +272,10 @@ public class ProdottoDAO {
         }
     }
 
-    public void updateProduct(Prodotto p, String idProdotto){
-        try (Connection connection = ConPool.getConnection()){
-            PreparedStatement preparedStatement = connection.prepareStatement("update prodotto set id_prodotto = ?, nome = ?, descrizione = ?, categoria = ?, immagine = ?, calorie = ?, carboidrati = ?, proteine = ?, grassi = ? where id_prodotto = ?");
+    public void updateProduct(Prodotto p, String idProdotto) {
+        try (Connection connection = ConPool.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement(
+                    "update prodotto set id_prodotto = ?, nome = ?, descrizione = ?, categoria = ?, immagine = ?, calorie = ?, carboidrati = ?, proteine = ?, grassi = ? where id_prodotto = ?");
             preparedStatement.setString(1, p.getIdProdotto());
             preparedStatement.setString(2, p.getNome());
             preparedStatement.setString(3, p.getDescrizione());
@@ -301,21 +287,20 @@ public class ProdottoDAO {
             preparedStatement.setInt(9, p.getGrassi());
             preparedStatement.setString(10, idProdotto);
 
-
             int rowsUpdated = preparedStatement.executeUpdate();
-        }catch (SQLException e){
+        } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     }
 
-
-    public void removeProductFromIdProdotto(String idProdotto){
-        try (Connection connection = ConPool.getConnection()){
-            PreparedStatement preparedStatement = connection.prepareStatement("delete from prodotto where id_prodotto = ?");
+    public void removeProductFromIdProdotto(String idProdotto) {
+        try (Connection connection = ConPool.getConnection()) {
+            PreparedStatement preparedStatement = connection
+                    .prepareStatement("delete from prodotto where id_prodotto = ?");
             preparedStatement.setString(1, idProdotto);
             int rowsUpdated = preparedStatement.executeUpdate();
 
-        }catch (SQLException e){
+        } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     }

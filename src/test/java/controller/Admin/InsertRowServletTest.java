@@ -29,6 +29,16 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 
+import model.Variante;
+import model.Ordine;
+import model.OrdineDao;
+import model.DettaglioOrdine;
+import model.DettaglioOrdineDAO;
+import model.Gusto;
+import model.GustoDAO;
+import model.Confezione;
+import model.ConfezioneDAO;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -98,6 +108,14 @@ public class InsertRowServletTest {
         when(request.getProtocol()).thenReturn("HTTP/1.1");
         servlet.doGet(request, response);
         verify(response).sendError(eq(HttpServletResponse.SC_METHOD_NOT_ALLOWED), anyString());
+    }
+
+    @Test
+    @DisplayName("Invalid table name -> Sends 400")
+    void doPost_invalidTableName_sendsError() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("invalid_table");
+        servlet.doPost(request, response);
+        verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
     }
 
     // --- Test 2: Verifica Correzione Faglie (Input non validi) ---
@@ -217,7 +235,7 @@ public class InsertRowServletTest {
 
         // 3. Mock avanzato per il sistema di file (Paths e Files)
         try (MockedStatic<Paths> pathsMock = mockStatic(Paths.class);
-             MockedStatic<Files> filesMock = mockStatic(Files.class)) {
+                MockedStatic<Files> filesMock = mockStatic(Files.class)) {
 
             // Prepara i mock per i Path
             Path mockPath = mock(Path.class);
@@ -229,7 +247,8 @@ public class InsertRowServletTest {
 
             // Simula la logica di 'getServletContext().getRealPath(...)'
             // (Ora usa servletContext, non request.getServletContext())
-            when(servletContext.getRealPath("Immagini/test-image.jpg")).thenReturn("/fake/path/Immagini/test-image.jpg");
+            when(servletContext.getRealPath("Immagini/test-image.jpg"))
+                    .thenReturn("/fake/path/Immagini/test-image.jpg");
 
             // (Il resto dei mock di Files e DAO rimane identico...)
             filesMock.when(() -> Files.exists(any(Path.class))).thenReturn(false);
@@ -274,5 +293,480 @@ public class InsertRowServletTest {
             // Il DAO non deve essere creato
             assertEquals(0, dao.constructed().size());
         }
+    }
+
+    // --- Test 6: Variante ---
+
+    @Test
+    @DisplayName("Inserimento 'variante' (Happy Path)")
+    void doPost_insertVariante_happyPath() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("variante");
+        when(request.getParameter("idProdottoVariante")).thenReturn("P1");
+        when(request.getParameter("idGusto")).thenReturn("1");
+        when(request.getParameter("idConfezione")).thenReturn("1");
+        when(request.getParameter("prezzo")).thenReturn("10.5");
+        when(request.getParameter("quantity")).thenReturn("100");
+        when(request.getParameter("sconto")).thenReturn("20");
+        when(request.getParameter("evidenza")).thenReturn("1");
+
+        when(request.getRequestDispatcher("showTable?tableName=variante")).thenReturn(dispatcher);
+
+        try (MockedConstruction<VarianteDAO> dao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+            doNothing().when(mock).doSaveVariante(any(Variante.class));
+        })) {
+            servlet.doPost(request, response);
+
+            verify(dispatcher).forward(request, response);
+            VarianteDAO mockDao = dao.constructed().get(0);
+            verify(mockDao).doSaveVariante(any(Variante.class));
+        }
+    }
+
+    @Test
+    @DisplayName("Inserimento 'variante' (Sad Path: Logical Validation)")
+    void doPost_insertVariante_logicalError() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("variante");
+        when(request.getParameter("idProdottoVariante")).thenReturn("P1");
+        when(request.getParameter("idGusto")).thenReturn("1");
+        when(request.getParameter("idConfezione")).thenReturn("1");
+        when(request.getParameter("prezzo")).thenReturn("-10.5"); // Invalid price
+        when(request.getParameter("quantity")).thenReturn("100");
+        when(request.getParameter("sconto")).thenReturn("20");
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    // --- Test 7: Ordine ---
+
+    @Test
+    @DisplayName("Inserimento 'ordine' (Happy Path)")
+    void doPost_insertOrdine_happyPath() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("ordine");
+        when(request.getParameter("emailUtente")).thenReturn("user@example.com");
+        when(request.getParameter("stato")).thenReturn("Consegnato");
+        when(request.getParameter("totale")).thenReturn("50.0");
+        when(request.getParameter("data")).thenReturn("2023-01-01");
+
+        when(request.getRequestDispatcher("showTable?tableName=ordine")).thenReturn(dispatcher);
+
+        try (MockedConstruction<OrdineDao> dao = mockConstruction(OrdineDao.class, (mock, ctx) -> {
+            doNothing().when(mock).doSave(any(Ordine.class));
+        })) {
+            servlet.doPost(request, response);
+
+            verify(dispatcher).forward(request, response);
+            OrdineDao mockDao = dao.constructed().get(0);
+            verify(mockDao).doSave(any(Ordine.class));
+        }
+    }
+
+    @Test
+    @DisplayName("Inserimento 'ordine' (Sad Path: Invalid Date)")
+    void doPost_insertOrdine_invalidDate() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("ordine");
+        when(request.getParameter("emailUtente")).thenReturn("user@example.com");
+        when(request.getParameter("stato")).thenReturn("Consegnato");
+        when(request.getParameter("totale")).thenReturn("50.0");
+        when(request.getParameter("data")).thenReturn("invalid-date");
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    // --- Test 8: DettaglioOrdine ---
+
+    @Test
+    @DisplayName("Inserimento 'dettagliOrdine' (Happy Path)")
+    void doPost_insertDettaglioOrdine_happyPath() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("dettagliOrdine");
+        when(request.getParameter("idOrdine")).thenReturn("1");
+        when(request.getParameter("idProdotto")).thenReturn("P1");
+        when(request.getParameter("idVariante")).thenReturn("1");
+        when(request.getParameter("quantity")).thenReturn("5");
+
+        when(request.getRequestDispatcher("showTable?tableName=dettagliOrdine")).thenReturn(dispatcher);
+
+        try (MockedConstruction<DettaglioOrdineDAO> dao = mockConstruction(DettaglioOrdineDAO.class, (mock, ctx) -> {
+            doNothing().when(mock).doSave(any(DettaglioOrdine.class));
+        })) {
+            servlet.doPost(request, response);
+
+            verify(dispatcher).forward(request, response);
+            DettaglioOrdineDAO mockDao = dao.constructed().get(0);
+            verify(mockDao).doSave(any(DettaglioOrdine.class));
+        }
+    }
+
+    @Test
+    @DisplayName("Inserimento 'dettagliOrdine' (Sad Path: Quantity <= 0)")
+    void doPost_insertDettaglioOrdine_invalidQuantity() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("dettagliOrdine");
+        when(request.getParameter("idOrdine")).thenReturn("1");
+        when(request.getParameter("idProdotto")).thenReturn("P1");
+        when(request.getParameter("idVariante")).thenReturn("1");
+        when(request.getParameter("quantity")).thenReturn("0");
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    @Test
+    @DisplayName("Inserimento 'dettagliOrdine' (Sad Path: NumberFormatException)")
+    void doPost_insertDettaglioOrdine_numberFormatError() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("dettagliOrdine");
+        when(request.getParameter("idOrdine")).thenReturn("1");
+        when(request.getParameter("idProdotto")).thenReturn("P1");
+        when(request.getParameter("idVariante")).thenReturn("1");
+        when(request.getParameter("quantity")).thenReturn("abc");
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    // --- Test 9: Gusto ---
+
+    @Test
+    @DisplayName("Inserimento 'gusto' (Happy Path)")
+    void doPost_insertGusto_happyPath() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("gusto");
+        when(request.getParameter("nomeGusto")).thenReturn("Cioccolato");
+
+        when(request.getRequestDispatcher("showTable?tableName=gusto")).thenReturn(dispatcher);
+
+        try (MockedConstruction<GustoDAO> dao = mockConstruction(GustoDAO.class, (mock, ctx) -> {
+            doNothing().when(mock).doSaveGusto(any(Gusto.class));
+        })) {
+            servlet.doPost(request, response);
+
+            verify(dispatcher).forward(request, response);
+            GustoDAO mockDao = dao.constructed().get(0);
+            verify(mockDao).doSaveGusto(any(Gusto.class));
+        }
+    }
+
+    @Test
+    @DisplayName("Inserimento 'gusto' (Sad Path: Empty Name)")
+    void doPost_insertGusto_emptyName() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("gusto");
+        when(request.getParameter("nomeGusto")).thenReturn("");
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    // --- Test 10: Confezione ---
+
+    @Test
+    @DisplayName("Inserimento 'confezione' (Happy Path)")
+    void doPost_insertConfezione_happyPath() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("confezione");
+        when(request.getParameter("pesoConfezione")).thenReturn("500");
+
+        when(request.getRequestDispatcher("showTable?tableName=confezione")).thenReturn(dispatcher);
+
+        try (MockedConstruction<ConfezioneDAO> dao = mockConstruction(ConfezioneDAO.class, (mock, ctx) -> {
+            doNothing().when(mock).doSaveConfezione(any(Confezione.class));
+        })) {
+            servlet.doPost(request, response);
+
+            verify(dispatcher).forward(request, response);
+            ConfezioneDAO mockDao = dao.constructed().get(0);
+            verify(mockDao).doSaveConfezione(any(Confezione.class));
+        }
+    }
+
+    @Test
+    @DisplayName("Inserimento 'confezione' (Sad Path: Invalid Weight)")
+    void doPost_insertConfezione_invalidWeight() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("confezione");
+        when(request.getParameter("pesoConfezione")).thenReturn("0");
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    @Test
+    @DisplayName("Inserimento 'confezione' (Sad Path: NumberFormatException)")
+    void doPost_insertConfezione_numberFormatError() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("confezione");
+        when(request.getParameter("pesoConfezione")).thenReturn("abc");
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    // --- Test 11: Utente ParseException ---
+
+    @Test
+    @DisplayName("Inserimento 'utente' (Sad Path: ParseException) -> Invia 500")
+    void doPost_insertUtente_parseException() throws ServletException, IOException {
+        setupValidUtenteParams();
+        when(request.getParameter("nameTable")).thenReturn("utente");
+        when(request.getParameter("dataDiNascita")).thenReturn("invalid-date"); // Causes ParseException
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    // --- Test 12: Prodotto File Collision & Edge Cases ---
+
+    @Test
+    @DisplayName("Inserimento 'prodotto' (File Collision) -> Rinomina file")
+    void doPost_insertProdotto_fileCollision() throws ServletException, IOException {
+        setupValidProdottoParams();
+        when(request.getParameter("nameTable")).thenReturn("prodotto");
+        when(request.getRequestDispatcher("showTable?tableName=prodotto")).thenReturn(dispatcher);
+
+        ServletContext servletContext = mock(ServletContext.class);
+        ServletConfig servletConfig = mock(ServletConfig.class);
+        when(servletConfig.getServletContext()).thenReturn(servletContext);
+        servlet.init(servletConfig);
+
+        try (MockedStatic<Paths> pathsMock = mockStatic(Paths.class);
+                MockedStatic<Files> filesMock = mockStatic(Files.class)) {
+
+            Path mockPath = mock(Path.class);
+            Path mockParentPath = mock(Path.class);
+
+            pathsMock.when(() -> Paths.get(anyString())).thenReturn(mockPath);
+            when(mockPath.getFileName()).thenReturn(mockPath);
+            when(mockPath.toString()).thenReturn("test-image.jpg");
+
+            // Mock collision: first exists, second doesn't
+            when(servletContext.getRealPath(anyString())).thenReturn("/fake/path");
+            filesMock.when(() -> Files.exists(any(Path.class)))
+                    .thenReturn(true) // First check: exists (collision)
+                    .thenReturn(false); // Second check: free
+
+            when(mockPath.getParent()).thenReturn(mockParentPath);
+            filesMock.when(() -> Files.createDirectories(any(Path.class))).thenReturn(mockParentPath);
+            filesMock.when(() -> Files.copy(any(InputStream.class), any(Path.class))).thenReturn(0L);
+
+            try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                doNothing().when(mock).doSave(any(Prodotto.class));
+            })) {
+                servlet.doPost(request, response);
+
+                verify(dispatcher).forward(request, response);
+                // Verify that the loop ran (Files.exists called at least twice)
+                filesMock.verify(() -> Files.exists(any(Path.class)), atLeast(2));
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Inserimento 'prodotto' (Sad Path: File size 0) -> Invia 500")
+    void doPost_insertProdotto_emptyFile() throws ServletException, IOException {
+        setupValidProdottoParams();
+        when(request.getParameter("nameTable")).thenReturn("prodotto");
+
+        Part filePart = request.getPart("immagine");
+        when(filePart.getSize()).thenReturn(0L);
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    @Test
+    @DisplayName("Inserimento 'prodotto' (Sad Path: Missing Fields) -> Invia 500")
+    void doPost_insertProdotto_missingFields() throws ServletException, IOException {
+        setupValidProdottoParams();
+        when(request.getParameter("nameTable")).thenReturn("prodotto");
+        when(request.getParameter("nome")).thenReturn(""); // Missing required field
+
+        // Initialize servlet to avoid IllegalStateException on getServletContext()
+        ServletContext servletContext = mock(ServletContext.class);
+        ServletConfig servletConfig = mock(ServletConfig.class);
+        when(servletConfig.getServletContext()).thenReturn(servletContext);
+        servlet.init(servletConfig);
+
+        // Mock getRealPath to avoid NPE if called
+        when(servletContext.getRealPath(anyString())).thenReturn("/fake/path");
+
+        // Mock Files/Paths to avoid actual file operations if reached
+        try (MockedStatic<Paths> pathsMock = mockStatic(Paths.class);
+                MockedStatic<Files> filesMock = mockStatic(Files.class)) {
+
+            Path mockPath = mock(Path.class);
+            pathsMock.when(() -> Paths.get(anyString())).thenReturn(mockPath);
+            when(mockPath.getFileName()).thenReturn(mockPath);
+            when(mockPath.toString()).thenReturn("test-image.jpg");
+            when(mockPath.getParent()).thenReturn(mock(Path.class));
+
+            servlet.doPost(request, response);
+        }
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    // --- Test 13: Variante Extra Branches ---
+
+    @Test
+    @DisplayName("Inserimento 'variante' (Evidenza true)")
+    void doPost_insertVariante_evidenzaTrue() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("variante");
+        when(request.getParameter("idProdottoVariante")).thenReturn("P1");
+        when(request.getParameter("idGusto")).thenReturn("1");
+        when(request.getParameter("idConfezione")).thenReturn("1");
+        when(request.getParameter("prezzo")).thenReturn("10.5");
+        when(request.getParameter("quantity")).thenReturn("100");
+        when(request.getParameter("sconto")).thenReturn("20");
+        when(request.getParameter("evidenza")).thenReturn("1"); // "1" -> true
+
+        when(request.getRequestDispatcher("showTable?tableName=variante")).thenReturn(dispatcher);
+
+        try (MockedConstruction<VarianteDAO> dao = mockConstruction(VarianteDAO.class)) {
+            servlet.doPost(request, response);
+
+            VarianteDAO mockDao = dao.constructed().get(0);
+            ArgumentCaptor<Variante> captor = ArgumentCaptor.forClass(Variante.class);
+            verify(mockDao).doSaveVariante(captor.capture());
+            assertTrue(captor.getValue().isEvidenza());
+        }
+    }
+
+    @Test
+    @DisplayName("Inserimento 'variante' (Sad Path: Missing Fields)")
+    void doPost_insertVariante_missingFields() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("variante");
+        when(request.getParameter("idProdottoVariante")).thenReturn(""); // Missing
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    // --- Test 14: Ordine Extra Branches ---
+
+    @Test
+    @DisplayName("Inserimento 'ordine' (Sad Path: Missing Email)")
+    void doPost_insertOrdine_missingEmail() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("ordine");
+        when(request.getParameter("emailUtente")).thenReturn("");
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    @Test
+    @DisplayName("Inserimento 'ordine' (Happy Path: Missing Optional Fields)")
+    void doPost_insertOrdine_missingOptional() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("ordine");
+        when(request.getParameter("emailUtente")).thenReturn("user@example.com");
+        when(request.getParameter("stato")).thenReturn("Consegnato");
+        when(request.getParameter("totale")).thenReturn(""); // Optional/Skipped
+        when(request.getParameter("data")).thenReturn(""); // Optional/Skipped
+
+        when(request.getRequestDispatcher("showTable?tableName=ordine")).thenReturn(dispatcher);
+
+        try (MockedConstruction<OrdineDao> dao = mockConstruction(OrdineDao.class)) {
+            servlet.doPost(request, response);
+            verify(dispatcher).forward(request, response);
+        }
+    }
+
+    // --- Test 15: DettaglioOrdine Extra Branches ---
+
+    @Test
+    @DisplayName("Inserimento 'dettagliOrdine' (Sad Path: Missing Fields)")
+    void doPost_insertDettaglioOrdine_missingFields() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("dettagliOrdine");
+        when(request.getParameter("idOrdine")).thenReturn(""); // Missing
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    // --- Test 16: Prodotto Extra Branches (New Coverage) ---
+
+    @Test
+    @DisplayName("Inserimento 'prodotto' (Sad Path: Invalid File Name) -> Invia 500")
+    void doPost_insertProdotto_invalidFileName_sendsError() throws ServletException, IOException {
+        setupValidProdottoParams();
+        when(request.getParameter("nameTable")).thenReturn("prodotto");
+
+        Part filePart = request.getPart("immagine");
+        when(filePart.getSubmittedFileName()).thenReturn(""); // Blank file name
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    @Test
+    @DisplayName("Inserimento 'prodotto' (Sad Path: NumberFormatException) -> Invia 500")
+    void doPost_insertProdotto_numberFormatError() throws ServletException, IOException {
+        setupValidProdottoParams();
+        when(request.getParameter("nameTable")).thenReturn("prodotto");
+        when(request.getParameter("calorie")).thenReturn("abc"); // Invalid number
+
+        // Initialize servlet to avoid IllegalStateException on getServletContext()
+        ServletContext servletContext = mock(ServletContext.class);
+        ServletConfig servletConfig = mock(ServletConfig.class);
+        when(servletConfig.getServletContext()).thenReturn(servletContext);
+        servlet.init(servletConfig);
+
+        // Mock getRealPath to avoid NPE if called
+        when(servletContext.getRealPath(anyString())).thenReturn("/fake/path");
+
+        // Mock Files/Paths to avoid actual file operations
+        try (MockedStatic<Paths> pathsMock = mockStatic(Paths.class);
+                MockedStatic<Files> filesMock = mockStatic(Files.class)) {
+
+            Path mockPath = mock(Path.class);
+            pathsMock.when(() -> Paths.get(anyString())).thenReturn(mockPath);
+            when(mockPath.getFileName()).thenReturn(mockPath);
+            when(mockPath.toString()).thenReturn("test-image.jpg");
+            when(mockPath.getParent()).thenReturn(mock(Path.class));
+
+            servlet.doPost(request, response);
+        }
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    // --- Test 17: Ordine Extra Branches (New Coverage) ---
+
+    @Test
+    @DisplayName("Inserimento 'ordine' (Sad Path: Invalid Totale) -> Invia 500")
+    void doPost_insertOrdine_invalidTotale_sendsError() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("ordine");
+        when(request.getParameter("emailUtente")).thenReturn("user@example.com");
+        when(request.getParameter("stato")).thenReturn("Consegnato");
+        when(request.getParameter("totale")).thenReturn("abc"); // Invalid number
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    // --- Test 18: Variante Extra Branches (New Coverage) ---
+
+    @Test
+    @DisplayName("Inserimento 'variante' (Sad Path: Invalid Discount > 100) -> Invia 500")
+    void doPost_insertVariante_invalidDiscount_sendsError() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("variante");
+        when(request.getParameter("idProdottoVariante")).thenReturn("P1");
+        when(request.getParameter("idGusto")).thenReturn("1");
+        when(request.getParameter("idConfezione")).thenReturn("1");
+        when(request.getParameter("prezzo")).thenReturn("10.5");
+        when(request.getParameter("quantity")).thenReturn("100");
+        when(request.getParameter("sconto")).thenReturn("101"); // Invalid discount
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
     }
 }

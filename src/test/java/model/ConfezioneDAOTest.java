@@ -59,6 +59,14 @@ class ConfezioneDAOTest {
     }
 
     @Test
+    void doRetrieveById_ZeroInput_ThrowsException() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
+            dao.doRetrieveById(0);
+        });
+        assertEquals("ID confezione non valido: deve essere > 0", e.getMessage());
+    }
+
+    @Test
     void doRetrieveById_ZeroIdFromDB_ThrowsRuntimeException() throws SQLException {
         // Testiamo il controllo difensivo: if (result == 0) throw RuntimeException
         try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
@@ -125,7 +133,8 @@ class ConfezioneDAOTest {
 
             verify(mockPreparedStatement).setInt(1, 10);
             verify(mockPreparedStatement).setInt(2, 100);
-            // Nota: Il tuo codice usa executeQuery() per un INSERT, quindi verifichiamo quello
+            // Nota: Il tuo codice usa executeQuery() per un INSERT, quindi verifichiamo
+            // quello
             verify(mockPreparedStatement).executeQuery();
         }
     }
@@ -190,5 +199,61 @@ class ConfezioneDAOTest {
             dao.doRemoveConfezione(0);
         });
         assertEquals("ID confezione non valido: deve essere > 0", e.getMessage());
+    }
+
+    // --- NEW TESTS ---
+
+    @Test
+    void doRetrieveById_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRetrieveById(1));
+        }
+    }
+
+    @Test
+    void doRetrieveAll_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRetrieveAll());
+        }
+    }
+
+    @Test
+    void doSaveConfezione_SQLException() throws SQLException {
+        Confezione c = new Confezione();
+        c.setIdConfezione(1);
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doSaveConfezione(c));
+        }
+    }
+
+    @Test
+    void doUpdateConfezione_SQLException() throws SQLException {
+        Confezione c = new Confezione();
+        c.setIdConfezione(1);
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doUpdateConfezione(c, 1));
+        }
+    }
+
+    @Test
+    void doRemoveConfezione_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRemoveConfezione(1));
+        }
     }
 }

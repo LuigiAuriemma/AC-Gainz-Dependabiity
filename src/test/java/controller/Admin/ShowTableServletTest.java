@@ -1,8 +1,19 @@
 package controller.Admin;
+
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import model.Variante;
+import model.VarianteDAO;
+import model.Ordine;
+import model.OrdineDao;
+import model.DettaglioOrdine;
+import model.DettaglioOrdineDAO;
+import model.Gusto;
+import model.GustoDAO;
+import model.Confezione;
+import model.ConfezioneDAO;
 import model.Prodotto;
 import model.ProdottoDAO;
 import model.Utente;
@@ -139,7 +150,122 @@ public class ShowTableServletTest {
         }
     }
 
-    // --- Test 6: Sad Path (tableName non valido) ---
+    // --- Test 6: Happy Path (tableName = "variante") ---
+
+    @Test
+    @DisplayName("doGet con tableName='variante' -> Forward a tableVariante.jsp")
+    void doGet_tableNameVariante_forwardsToVariante() throws ServletException, IOException {
+        when(request.getParameter("tableName")).thenReturn("variante");
+
+        List<Variante> listVarianti = new ArrayList<>();
+        RequestDispatcher dispatcher = mock(RequestDispatcher.class);
+        when(request.getRequestDispatcher("WEB-INF/Admin/tableVariante.jsp")).thenReturn(dispatcher);
+
+        try (MockedConstruction<VarianteDAO> dao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+            when(mock.doRetrieveAll()).thenReturn(listVarianti);
+        })) {
+
+            servlet.doGet(request, response);
+
+            verify(dao.constructed().get(0)).doRetrieveAll();
+            verify(request).setAttribute("tableVariante", listVarianti);
+            verify(dispatcher).forward(request, response);
+        }
+    }
+
+    // --- Test 7: Happy Path (tableName = "ordine") ---
+
+    @Test
+    @DisplayName("doGet con tableName='ordine' -> Forward a tableOrdine.jsp")
+    void doGet_tableNameOrdine_forwardsToOrdine() throws ServletException, IOException {
+        when(request.getParameter("tableName")).thenReturn("ordine");
+
+        List<Ordine> listOrdini = new ArrayList<>();
+        RequestDispatcher dispatcher = mock(RequestDispatcher.class);
+        when(request.getRequestDispatcher("WEB-INF/Admin/tableOrdine.jsp")).thenReturn(dispatcher);
+
+        try (MockedConstruction<OrdineDao> dao = mockConstruction(OrdineDao.class, (mock, ctx) -> {
+            when(mock.doRetrieveAll()).thenReturn(listOrdini);
+        })) {
+
+            servlet.doGet(request, response);
+
+            verify(dao.constructed().get(0)).doRetrieveAll();
+            verify(request).setAttribute("tableOrdine", listOrdini);
+            verify(dispatcher).forward(request, response);
+        }
+    }
+
+    // --- Test 8: Happy Path (tableName = "dettaglioOrdine") ---
+
+    @Test
+    @DisplayName("doGet con tableName='dettaglioOrdine' -> Forward a tableDettaglioOrdini.jsp")
+    void doGet_tableNameDettaglioOrdine_forwardsToDettaglioOrdine() throws ServletException, IOException {
+        when(request.getParameter("tableName")).thenReturn("dettaglioOrdine");
+
+        List<DettaglioOrdine> listDettagli = new ArrayList<>();
+        RequestDispatcher dispatcher = mock(RequestDispatcher.class);
+        when(request.getRequestDispatcher("WEB-INF/Admin/tableDettaglioOrdini.jsp")).thenReturn(dispatcher);
+
+        try (MockedConstruction<DettaglioOrdineDAO> dao = mockConstruction(DettaglioOrdineDAO.class, (mock, ctx) -> {
+            when(mock.doRetrieveAll()).thenReturn(listDettagli);
+        })) {
+
+            servlet.doGet(request, response);
+
+            verify(dao.constructed().get(0)).doRetrieveAll();
+            verify(request).setAttribute("tableDettaglioOrdini", listDettagli);
+            verify(dispatcher).forward(request, response);
+        }
+    }
+
+    // --- Test 9: Happy Path (tableName = "gusto") ---
+
+    @Test
+    @DisplayName("doGet con tableName='gusto' -> Forward a tableGusto.jsp")
+    void doGet_tableNameGusto_forwardsToGusto() throws ServletException, IOException {
+        when(request.getParameter("tableName")).thenReturn("gusto");
+
+        List<Gusto> listGusti = new ArrayList<>();
+        RequestDispatcher dispatcher = mock(RequestDispatcher.class);
+        when(request.getRequestDispatcher("WEB-INF/Admin/tableGusto.jsp")).thenReturn(dispatcher);
+
+        try (MockedConstruction<GustoDAO> dao = mockConstruction(GustoDAO.class, (mock, ctx) -> {
+            when(mock.doRetrieveAll()).thenReturn(listGusti);
+        })) {
+
+            servlet.doGet(request, response);
+
+            verify(dao.constructed().get(0)).doRetrieveAll();
+            verify(request).setAttribute("tableGusto", listGusti);
+            verify(dispatcher).forward(request, response);
+        }
+    }
+
+    // --- Test 10: Happy Path (tableName = "confezione") ---
+
+    @Test
+    @DisplayName("doGet con tableName='confezione' -> Forward a tableConfezione.jsp")
+    void doGet_tableNameConfezione_forwardsToConfezione() throws ServletException, IOException {
+        when(request.getParameter("tableName")).thenReturn("confezione");
+
+        List<Confezione> listConfezioni = new ArrayList<>();
+        RequestDispatcher dispatcher = mock(RequestDispatcher.class);
+        when(request.getRequestDispatcher("WEB-INF/Admin/tableConfezione.jsp")).thenReturn(dispatcher);
+
+        try (MockedConstruction<ConfezioneDAO> dao = mockConstruction(ConfezioneDAO.class, (mock, ctx) -> {
+            when(mock.doRetrieveAll()).thenReturn(listConfezioni);
+        })) {
+
+            servlet.doGet(request, response);
+
+            verify(dao.constructed().get(0)).doRetrieveAll();
+            verify(request).setAttribute("tableConfezione", listConfezioni);
+            verify(dispatcher).forward(request, response);
+        }
+    }
+
+    // --- Test 11: Sad Path (tableName non valido) ---
 
     @Test
     @DisplayName("doGet con 'tableName' non valido -> Non fa nulla")

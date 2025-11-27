@@ -89,8 +89,10 @@ class VarianteDAOTest {
     @Test
     void doRetrieveVariantiByProdotti_ListPopulated_GeneratesInClause() throws SQLException {
         List<Prodotto> prodotti = new ArrayList<>();
-        Prodotto p1 = new Prodotto(); p1.setIdProdotto("A");
-        Prodotto p2 = new Prodotto(); p2.setIdProdotto("B");
+        Prodotto p1 = new Prodotto();
+        p1.setIdProdotto("A");
+        Prodotto p2 = new Prodotto();
+        p2.setIdProdotto("B");
         prodotti.add(p1);
         prodotti.add(p2);
 
@@ -236,6 +238,465 @@ class VarianteDAOTest {
             Variante result = dao.doRetrieveCheapestVariant("P1");
 
             assertEquals(9.99f, result.getPrezzo());
+        }
+    }
+
+    // --- NEW TESTS ---
+
+    @Test
+    void doRetrieveAll_Success() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement("select * from variante")).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            when(mockResultSet.next()).thenReturn(true, true, false);
+            when(mockResultSet.getInt("id_variante")).thenReturn(1, 2);
+
+            List<Variante> result = dao.doRetrieveAll();
+
+            assertEquals(2, result.size());
+            assertEquals(1, result.get(0).getIdVariante());
+            assertEquals(2, result.get(1).getIdVariante());
+        }
+    }
+
+    @Test
+    void doRetrieveVariantByFlavourAndWeight_Success() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            when(mockResultSet.next()).thenReturn(true, false);
+            when(mockResultSet.getString("nomeGusto")).thenReturn("Fragola");
+
+            List<Variante> result = dao.doRetrieveVariantByFlavourAndWeight("P1", "Fragola", 500);
+
+            assertEquals(1, result.size());
+            assertEquals("Fragola", result.get(0).getGusto());
+
+            verify(mockPreparedStatement).setString(1, "P1");
+            verify(mockPreparedStatement).setString(2, "Fragola");
+            verify(mockPreparedStatement).setInt(3, 500);
+        }
+    }
+
+    @Test
+    void doRetrieveVarianteByIdVariante_Found() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            when(mockResultSet.next()).thenReturn(true);
+            when(mockResultSet.getInt("id_variante")).thenReturn(123);
+
+            Variante result = dao.doRetrieveVarianteByIdVariante(123);
+
+            assertNotNull(result);
+            assertEquals(123, result.getIdVariante());
+            verify(mockPreparedStatement).setInt(1, 123);
+        }
+    }
+
+    @Test
+    void doRetrieveVarianteByIdVariante_NotFound() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            when(mockResultSet.next()).thenReturn(false);
+
+            Variante result = dao.doRetrieveVarianteByIdVariante(999);
+
+            assertNull(result);
+        }
+    }
+
+    @Test
+    void updateVariante_Success() throws SQLException {
+        Variante v = new Variante();
+        v.setIdVariante(1);
+        v.setIdProdotto("P1");
+        v.setIdGusto(2);
+        v.setIdConfezione(3);
+        v.setPrezzo(15.0f);
+        v.setQuantita(50);
+        v.setSconto(0);
+        v.setEvidenza(false);
+
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+
+            dao.updateVariante(v, 1);
+
+            verify(mockPreparedStatement).setInt(1, 1); // id_variante (set)
+            verify(mockPreparedStatement).setString(2, "P1");
+            verify(mockPreparedStatement).setFloat(5, 15.0f);
+            verify(mockPreparedStatement).setInt(9, 1); // where id_variante
+            verify(mockPreparedStatement).executeUpdate();
+        }
+    }
+
+    @Test
+    void doRemoveVariante_Success() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+
+            dao.doRemoveVariante(55);
+
+            verify(mockPreparedStatement).setInt(1, 55);
+            verify(mockPreparedStatement).executeUpdate();
+        }
+    }
+
+    @Test
+    void doRetrieveCheapestFilteredVarianteByIdProdotto_FiltersParsing() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+
+            ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+            when(mockConnection.prepareStatement(sqlCaptor.capture())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+            when(mockResultSet.next()).thenReturn(true);
+
+            dao.doRetrieveCheapestFilteredVarianteByIdProdotto("P1", "250 g", "Vaniglia (New)", false);
+
+            String sql = sqlCaptor.getValue();
+            assertTrue(sql.contains("AND c.peso = ?"));
+            assertTrue(sql.contains("AND g.nomeGusto = ?"));
+            assertFalse(sql.contains("AND v.evidenza = 1"));
+
+            verify(mockPreparedStatement).setString(1, "P1");
+            verify(mockPreparedStatement).setInt(2, 250);
+            verify(mockPreparedStatement).setString(3, "Vaniglia");
+        }
+    }
+
+    @Test
+    void doRetrieveAll_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRetrieveAll());
+        }
+    }
+
+    @Test
+    void doRetrieveVariantiByIdProdotto_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRetrieveVariantiByIdProdotto("P1"));
+        }
+    }
+
+    @Test
+    void doRetrieveVariantByFlavourAndWeight_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRetrieveVariantByFlavourAndWeight("P1", "Gusto", 100));
+        }
+    }
+
+    @Test
+    void doRetrieveVarianteByIdVariante_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRetrieveVarianteByIdVariante(1));
+        }
+    }
+
+    @Test
+    void doRetrieveCheapestVariant_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRetrieveCheapestVariant("P1"));
+        }
+    }
+
+    @Test
+    void doRetrieveVariantiByProdotti_SQLException() throws SQLException {
+        List<Prodotto> prodotti = new ArrayList<>();
+        prodotti.add(new Prodotto());
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRetrieveVariantiByProdotti(prodotti));
+        }
+    }
+
+    @Test
+    void doRetrieveFilteredVariantiByIdProdotto_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRetrieveFilteredVariantiByIdProdotto("P1", null, null));
+        }
+    }
+
+    @Test
+    void doRetrieveCheapestFilteredVarianteByIdProdotto_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class,
+                    () -> dao.doRetrieveCheapestFilteredVarianteByIdProdotto("P1", null, null, false));
+        }
+    }
+
+    @Test
+    void updateVariante_SQLException() throws SQLException {
+        Variante v = new Variante();
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.updateVariante(v, 1));
+        }
+    }
+
+    @Test
+    void doRemoveVariante_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRemoveVariante(1));
+        }
+    }
+
+    @Test
+    void doSaveVariante_SQLException() throws SQLException {
+        Variante v = new Variante();
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doSaveVariante(v));
+        }
+    }
+
+    @Test
+    void doRetrieveVariantByCriteria_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRetrieveVariantByCriteria("P1", "flavour", "val"));
+        }
+    }
+
+    @Test
+    void doRetrieveVariantByCriteria_UnknownAttribute() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+            when(mockConnection.prepareStatement(sqlCaptor.capture())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            dao.doRetrieveVariantByCriteria("P1", "unknown", "val");
+
+            String sql = sqlCaptor.getValue();
+            // Should not append any extra condition
+            assertFalse(sql.contains("and g.nomeGusto"));
+            assertFalse(sql.contains("and c.peso"));
+
+            // Should only set 1 parameter (idProdotto)
+            verify(mockPreparedStatement).setString(1, "P1");
+            verify(mockPreparedStatement, never()).setString(eq(2), anyString());
+        }
+    }
+
+    @Test
+    void doRetrieveFilteredVariantiByIdProdotto_PartialFilters() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+            when(mockConnection.prepareStatement(sqlCaptor.capture())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            // Case 1: Only Weight
+            dao.doRetrieveFilteredVariantiByIdProdotto("P1", "100 g", null);
+            String sql1 = sqlCaptor.getValue();
+            assertTrue(sql1.contains("AND c.peso = ?"));
+            assertFalse(sql1.contains("AND g.nomeGusto = ?"));
+            verify(mockPreparedStatement).setInt(2, 100);
+
+            // Reset mocks for Case 2
+            reset(mockPreparedStatement);
+            when(mockConnection.prepareStatement(sqlCaptor.capture())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            // Case 2: Only Taste
+            dao.doRetrieveFilteredVariantiByIdProdotto("P1", null, "Choco (Info)");
+            String sql2 = sqlCaptor.getValue();
+            assertFalse(sql2.contains("AND c.peso = ?"));
+            assertTrue(sql2.contains("AND g.nomeGusto = ?"));
+            verify(mockPreparedStatement).setString(2, "Choco");
+        }
+    }
+
+    @Test
+    void doRetrieveCheapestFiltered_EvidenceFalse() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+
+            ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+            when(mockConnection.prepareStatement(sqlCaptor.capture())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+            when(mockResultSet.next()).thenReturn(true);
+
+            dao.doRetrieveCheapestFilteredVarianteByIdProdotto("P1", null, null, false);
+
+            String sql = sqlCaptor.getValue();
+            assertFalse(sql.contains("AND v.evidenza = 1"));
+        }
+    }
+
+    @Test
+    void doRetrieveCheapestFiltered_NotFound() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            when(mockResultSet.next()).thenReturn(false);
+
+            Variante result = dao.doRetrieveCheapestFilteredVarianteByIdProdotto("P1", null, null, false);
+
+            assertNull(result);
+        }
+    }
+
+    @Test
+    void doRetrieveCheapestFiltered_EmptyFilters() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+            when(mockConnection.prepareStatement(sqlCaptor.capture())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+            when(mockResultSet.next()).thenReturn(true);
+
+            // Pass empty strings
+            dao.doRetrieveCheapestFilteredVarianteByIdProdotto("P1", "   ", "", false);
+
+            String sql = sqlCaptor.getValue();
+            assertFalse(sql.contains("AND c.peso = ?"));
+            assertFalse(sql.contains("AND g.nomeGusto = ?"));
+
+            // Only 1 param set (idProdotto)
+            verify(mockPreparedStatement).setString(1, "P1");
+            verify(mockPreparedStatement, never()).setInt(eq(2), anyInt());
+        }
+    }
+
+    @Test
+    void doRetrieveFilteredVarianti_EmptyFilters() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+            when(mockConnection.prepareStatement(sqlCaptor.capture())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            dao.doRetrieveFilteredVariantiByIdProdotto("P1", "", "   ");
+
+            String sql = sqlCaptor.getValue();
+            assertFalse(sql.contains("AND c.peso = ?"));
+            assertFalse(sql.contains("AND g.nomeGusto = ?"));
+        }
+    }
+
+    @Test
+    void doRetrieveVariantiByProdotti_SingleProduct() throws SQLException {
+        List<Prodotto> prodotti = new ArrayList<>();
+        Prodotto p = new Prodotto();
+        p.setIdProdotto("SINGLE");
+        prodotti.add(p);
+
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+            when(mockConnection.prepareStatement(sqlCaptor.capture())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            dao.doRetrieveVariantiByProdotti(prodotti);
+
+            String sql = sqlCaptor.getValue();
+            assertTrue(sql.contains("IN (?)"));
+            assertFalse(sql.contains(", ?")); // No commas for single item
+
+            verify(mockPreparedStatement).setString(1, "SINGLE");
+        }
+    }
+
+    @Test
+    void doRetrieveCheapestVariant_NotFound() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            when(mockResultSet.next()).thenReturn(false);
+
+            Variante result = dao.doRetrieveCheapestVariant("P1");
+
+            // Verify it returns an empty object, not null
+            assertNotNull(result);
+            assertEquals(0, result.getIdVariante()); // Default int value
+            assertNull(result.getIdProdotto()); // Default string value
+        }
+    }
+
+    @Test
+    void doRetrieveVariantByCriteria_InvalidWeight() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+
+            assertThrows(NumberFormatException.class, () -> dao.doRetrieveVariantByCriteria("P1", "weight", "invalid"));
+        }
+    }
+
+    @Test
+    void doRetrieveFilteredVarianti_InvalidWeight() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+
+            assertThrows(NumberFormatException.class,
+                    () -> dao.doRetrieveFilteredVariantiByIdProdotto("P1", "invalid g", null));
+        }
+    }
+
+    @Test
+    void doRetrieveFilteredVarianti_TasteNoParenthesis() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+            when(mockConnection.prepareStatement(sqlCaptor.capture())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            dao.doRetrieveFilteredVariantiByIdProdotto("P1", null, "SimpleTaste");
+
+            String sql = sqlCaptor.getValue();
+            assertTrue(sql.contains("AND g.nomeGusto = ?"));
+            verify(mockPreparedStatement).setString(2, "SimpleTaste");
         }
     }
 }

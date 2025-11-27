@@ -59,7 +59,8 @@ class UtenteDAOTest {
             assertEquals("Mario", result.getNome());
             assertEquals(email, result.getEmail());
 
-            // Verifichiamo che i parametri siano stati settati correttamente nel PreparedStatement
+            // Verifichiamo che i parametri siano stati settati correttamente nel
+            // PreparedStatement
             verify(mockPreparedStatement).setString(1, email);
             verify(mockPreparedStatement).setString(2, password);
         }
@@ -114,7 +115,8 @@ class UtenteDAOTest {
 
         try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
             mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
-            when(mockConnection.prepareStatement(anyString(), eq(Statement.RETURN_GENERATED_KEYS))).thenReturn(mockPreparedStatement);
+            when(mockConnection.prepareStatement(anyString(), eq(Statement.RETURN_GENERATED_KEYS)))
+                    .thenReturn(mockPreparedStatement);
             when(mockPreparedStatement.executeUpdate()).thenReturn(1); // 1 riga inserita
 
             utenteDAO.doSave(u);
@@ -132,7 +134,8 @@ class UtenteDAOTest {
 
         try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
             mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
-            when(mockConnection.prepareStatement(anyString(), eq(Statement.RETURN_GENERATED_KEYS))).thenReturn(mockPreparedStatement);
+            when(mockConnection.prepareStatement(anyString(), eq(Statement.RETURN_GENERATED_KEYS)))
+                    .thenReturn(mockPreparedStatement);
             when(mockPreparedStatement.executeUpdate()).thenReturn(0); // 0 righe inserite, errore
 
             RuntimeException exception = assertThrows(RuntimeException.class, () -> {
@@ -202,7 +205,8 @@ class UtenteDAOTest {
 
             utenteDAO.doUpdateCustomerGeneric(u, "dataDiNascita", dateString);
 
-            // Verifica che sia stato chiamato setDate (logica specifica del case "dataDiNascita")
+            // Verifica che sia stato chiamato setDate (logica specifica del case
+            // "dataDiNascita")
             verify(mockPreparedStatement).setDate(eq(1), any(java.sql.Date.class));
             verify(mockPreparedStatement).executeUpdate();
         }
@@ -247,6 +251,143 @@ class UtenteDAOTest {
             assertThrows(RuntimeException.class, () -> {
                 utenteDAO.doRetrieveAll();
             });
+        }
+    }
+
+    // --- NEW TESTS ---
+
+    @Test
+    void doRetrieveByEmailAndPassword_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> utenteDAO.doRetrieveByEmailAndPassword("email", "pass"));
+        }
+    }
+
+    @Test
+    void doRetrieveByEmail_NotFound() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+            when(mockResultSet.next()).thenReturn(false);
+
+            Utente result = utenteDAO.doRetrieveByEmail("notfound@test.com");
+            assertNull(result);
+        }
+    }
+
+    @Test
+    void doRetrieveByEmail_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> utenteDAO.doRetrieveByEmail("email"));
+        }
+    }
+
+    @Test
+    void doSave_SQLException() throws SQLException {
+        Utente u = new Utente();
+        u.setDataNascita(new java.util.Date());
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString(), eq(Statement.RETURN_GENERATED_KEYS)))
+                    .thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> utenteDAO.doSave(u));
+        }
+    }
+
+    @Test
+    void doUpdateCustomer_SQLException() throws SQLException {
+        Utente u = new Utente();
+        u.setDataNascita(new java.util.Date());
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> utenteDAO.doUpdateCustomer(u, "email"));
+        }
+    }
+
+    @Test
+    void doUpdateCustomerGeneric_PoteriFalse() throws SQLException {
+        Utente u = new Utente();
+        u.setEmail("test@test.com");
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+
+            utenteDAO.doUpdateCustomerGeneric(u, "poteri", "false");
+
+            verify(mockPreparedStatement).setBoolean(1, false);
+            verify(mockPreparedStatement).executeUpdate();
+        }
+    }
+
+    @Test
+    void doUpdateCustomerGeneric_Default() throws SQLException {
+        Utente u = new Utente();
+        u.setEmail("test@test.com");
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+
+            utenteDAO.doUpdateCustomerGeneric(u, "nome", "NewName");
+
+            verify(mockPreparedStatement).setString(1, "NewName");
+            verify(mockPreparedStatement).executeUpdate();
+        }
+    }
+
+    @Test
+    void doUpdateCustomerGeneric_ParseException() throws SQLException {
+        Utente u = new Utente();
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+
+            assertThrows(RuntimeException.class,
+                    () -> utenteDAO.doUpdateCustomerGeneric(u, "dataDiNascita", "invalid-date"));
+        }
+    }
+
+    @Test
+    void doUpdateCustomerGeneric_SQLException() throws SQLException {
+        Utente u = new Utente();
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> utenteDAO.doUpdateCustomerGeneric(u, "nome", "val"));
+        }
+    }
+
+    @Test
+    void doRemoveUserByEmail_NoDelete() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeUpdate()).thenReturn(0);
+
+            // Should not throw exception, just print to stdout
+            utenteDAO.doRemoveUserByEmail("nodelete@me.com");
+
+            verify(mockPreparedStatement).executeUpdate();
+        }
+    }
+
+    @Test
+    void doRemoveUserByEmail_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> utenteDAO.doRemoveUserByEmail("email"));
         }
     }
 }

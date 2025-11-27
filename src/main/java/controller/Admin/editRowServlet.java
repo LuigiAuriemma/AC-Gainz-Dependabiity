@@ -11,6 +11,7 @@ import model.*;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
@@ -19,7 +20,7 @@ import java.util.List;
 public class editRowServlet extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        //prende il nome della tabella e la primarykey dalla request
+        // prende il nome della tabella e la primarykey dalla request
         String tableName = req.getParameter("tableName");
         String primaryKey = req.getParameter("primaryKey");
 
@@ -32,8 +33,8 @@ public class editRowServlet extends HttpServlet {
 
         boolean success = false;
 
-        //in base a quale tabella viene scelta viene chiamato un metodo
-        //se il nome della tabella è errato manda un errore
+        // in base a quale tabella viene scelta viene chiamato un metodo
+        // se il nome della tabella è errato manda un errore
         switch (tableName) {
             case "utente" ->
                 success = editUtente(req, primaryKey);
@@ -53,7 +54,7 @@ public class editRowServlet extends HttpServlet {
                 resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
         }
 
-        //se ha funzionato tutto correttamente mostra la tabella
+        // se ha funzionato tutto correttamente mostra la tabella
         if (success) {
             req.getRequestDispatcher("showTable?tableName=" + tableName).forward(req, resp);
         } else {
@@ -61,7 +62,7 @@ public class editRowServlet extends HttpServlet {
         }
     }
 
-    //Controlla se i parametri sono validi
+    // Controlla se i parametri sono validi
     private boolean isValid(List<String> params) {
         for (String param : params) {
             if (param == null || param.isBlank()) {
@@ -71,8 +72,9 @@ public class editRowServlet extends HttpServlet {
         return true;
     }
 
-    //prende i parametri dalla request,crea un oggetto Utente avente quei parametri e poi tramite il DAO
-    //aggiorna i parametri nel database
+    // prende i parametri dalla request,crea un oggetto Utente avente quei parametri
+    // e poi tramite il DAO
+    // aggiorna i parametri nel database
     private boolean editUtente(HttpServletRequest req, String primaryKey) {
         String email = req.getParameter("email");
         String nome = req.getParameter("nome");
@@ -82,7 +84,7 @@ public class editRowServlet extends HttpServlet {
         String indirizzo = req.getParameter("indirizzo");
         String telefono = req.getParameter("telefono");
 
-        if (isValid(List.of(email, nome, cognome, codiceFiscale, dataDiNascita, indirizzo, telefono))) {
+        if (isValid(Arrays.asList(email, nome, cognome, codiceFiscale, dataDiNascita, indirizzo, telefono))) {
             Utente u = new Utente();
             u.setEmail(email);
             u.setNome(nome);
@@ -108,9 +110,9 @@ public class editRowServlet extends HttpServlet {
         return false;
     }
 
-
-    //prende i parametri dalla request,crea un oggetto Prodotto avente quei parametri e poi tramite il DAO
-    //aggiorna i parametri nel database
+    // prende i parametri dalla request,crea un oggetto Prodotto avente quei
+    // parametri e poi tramite il DAO
+    // aggiorna i parametri nel database
     private boolean editProdotto(HttpServletRequest req, String primaryKey) {
         String idProdotto = req.getParameter("idProdotto");
         String nome = req.getParameter("nome");
@@ -122,9 +124,11 @@ public class editRowServlet extends HttpServlet {
         String proteine = req.getParameter("proteine");
         String grassi = req.getParameter("grassi");
 
-        if (isValid(List.of(idProdotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi))) {
+        if (isValid(
+                Arrays.asList(idProdotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine,
+                        grassi))) {
 
-            try{
+            try {
                 Prodotto p = new Prodotto();
                 p.setIdProdotto(idProdotto);
                 p.setNome(nome);
@@ -148,9 +152,9 @@ public class editRowServlet extends HttpServlet {
         return false;
     }
 
-
-    //prende i parametri dalla request,crea un oggetto Variante avente quei parametri e poi tramite il DAO
-    //aggiorna i parametri nel database
+    // prende i parametri dalla request,crea un oggetto Variante avente quei
+    // parametri e poi tramite il DAO
+    // aggiorna i parametri nel database
     private boolean editVariante(HttpServletRequest req, String primaryKey) {
         String idVariante = req.getParameter("idVariante");
         String idProdottoVariante = req.getParameter("idProdottoVariante");
@@ -161,7 +165,10 @@ public class editRowServlet extends HttpServlet {
         String sconto = req.getParameter("sconto");
         String evidenza = req.getParameter("evidenza");
 
-        if (isValid(List.of(idVariante, idProdottoVariante, idGusto, idConfezione, prezzo, quantity, sconto, evidenza))) {
+        if (isValid(
+                Arrays.asList(idVariante, idProdottoVariante, idGusto, idConfezione, prezzo, quantity, sconto,
+                        evidenza))) {
+            try {
                 Variante v = new Variante();
                 v.setIdVariante(Integer.parseInt(idVariante));
                 v.setIdProdotto(idProdottoVariante);
@@ -175,13 +182,17 @@ public class editRowServlet extends HttpServlet {
                 VarianteDAO varianteDAO = new VarianteDAO();
                 varianteDAO.updateVariante(v, Integer.parseInt(primaryKey));
                 return true;
+            } catch (NumberFormatException e) {
+                e.printStackTrace();
+                return false;
+            }
         }
         return false;
     }
 
-
-    //prende i parametri dalla request,crea un oggetto Ordine avente quei parametri e poi tramite il DAO
-    //aggiorna i parametri nel database
+    // prende i parametri dalla request,crea un oggetto Ordine avente quei parametri
+    // e poi tramite il DAO
+    // aggiorna i parametri nel database
     private boolean editOrdine(HttpServletRequest req, String primaryKey) {
         String idOrdine = req.getParameter("idOrdine");
         String emailUtente = req.getParameter("emailUtente");
@@ -189,9 +200,8 @@ public class editRowServlet extends HttpServlet {
         String stato = req.getParameter("stato");
         String totaleStr = req.getParameter("totale");
 
-
         // Validate if all parameters are valid
-        if (isValid(List.of(idOrdine, emailUtente, dataStr, stato, totaleStr))) {
+        if (isValid(Arrays.asList(idOrdine, emailUtente, dataStr, stato, totaleStr))) {
             SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
             Date data;
             try {
@@ -238,44 +248,52 @@ public class editRowServlet extends HttpServlet {
         return false;
     }
 
-    //prende i parametri dalla request,crea un oggetto DettaglioOrdine avente quei parametri e poi tramite il DAO
-    //aggiorna i parametri nel database
+    // prende i parametri dalla request,crea un oggetto DettaglioOrdine avente quei
+    // parametri e poi tramite il DAO
+    // aggiorna i parametri nel database
     private boolean editDettaglioOrdine(HttpServletRequest req, String primaryKey) {
         String idOrdine = req.getParameter("idOrdine");
         String idVariante = req.getParameter("idVariante");
         String idProdotto = req.getParameter("idProdotto");
         String quantity = req.getParameter("quantity");
 
-        if (isValid(List.of(idOrdine, idVariante, idProdotto, quantity))) {
-            int q = Integer.parseInt(quantity);
-            if (q < 0) return false;
+        if (isValid(Arrays.asList(idOrdine, idVariante, idProdotto, quantity))) {
+            try {
+                int q = Integer.parseInt(quantity);
+                if (q < 0)
+                    return false;
 
-            DettaglioOrdine dettaglioOrdine = new DettaglioOrdine();
-            dettaglioOrdine.setIdOrdine(Integer.parseInt(idOrdine));
-            dettaglioOrdine.setIdProdotto(idProdotto);
-            dettaglioOrdine.setIdVariante(Integer.parseInt(idVariante));
-            dettaglioOrdine.setQuantita(q);
+                DettaglioOrdine dettaglioOrdine = new DettaglioOrdine();
+                dettaglioOrdine.setIdOrdine(Integer.parseInt(idOrdine));
+                dettaglioOrdine.setIdProdotto(idProdotto);
+                dettaglioOrdine.setIdVariante(Integer.parseInt(idVariante));
+                dettaglioOrdine.setQuantita(q);
 
-            String[] primaryKeys = primaryKey.split(", ");
-            int firstPK = Integer.parseInt(primaryKeys[0]);
-            String secondPK = primaryKeys[1];
-            int thirdPK = Integer.parseInt(primaryKeys[2]);
+                String[] primaryKeys = primaryKey.split(", ");
+                int firstPK = Integer.parseInt(primaryKeys[0]);
+                String secondPK = primaryKeys[1];
+                int thirdPK = Integer.parseInt(primaryKeys[2]);
 
-            DettaglioOrdineDAO dettaglioOrdineDAO = new DettaglioOrdineDAO();
-            dettaglioOrdineDAO.doUpdateDettaglioOrdine(dettaglioOrdine, firstPK, secondPK, thirdPK);
-            return true;
+                DettaglioOrdineDAO dettaglioOrdineDAO = new DettaglioOrdineDAO();
+                dettaglioOrdineDAO.doUpdateDettaglioOrdine(dettaglioOrdine, firstPK, secondPK, thirdPK);
+                return true;
+            } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
+                e.printStackTrace();
+                return false;
+            }
         }
         return false;
     }
 
-
-    //prende i parametri dalla request,crea un oggetto Gusto avente quei parametri e poi tramite il DAO
-    //aggiorna i parametri nel database
+    // prende i parametri dalla request,crea un oggetto Gusto avente quei parametri
+    // e poi tramite il DAO
+    // aggiorna i parametri nel database
     private boolean editGusto(HttpServletRequest req, String primaryKey) {
         String idGusto = req.getParameter("idGusto");
         String nomeGusto = req.getParameter("nomeGusto");
 
-        if (isValid(List.of(idGusto, nomeGusto))) {
+        if (isValid(Arrays.asList(idGusto, nomeGusto))) {
+            try {
                 Gusto gusto = new Gusto();
                 gusto.setIdGusto(Integer.parseInt(idGusto));
                 gusto.setNome(nomeGusto);
@@ -283,25 +301,36 @@ public class editRowServlet extends HttpServlet {
                 GustoDAO gustoDAO = new GustoDAO();
                 gustoDAO.updateGusto(gusto, Integer.parseInt(primaryKey));
                 return true;
+            } catch (NumberFormatException e) {
+                e.printStackTrace();
+                return false;
+            }
         }
         return false;
     }
 
-
-    //prende i parametri dalla request,crea un oggetto Confezione avente quei parametri e poi tramite il DAO
-    //aggiorna i parametri nel database
+    // prende i parametri dalla request,crea un oggetto Confezione avente quei
+    // parametri e poi tramite il DAO
+    // aggiorna i parametri nel database
     private boolean editConfezione(HttpServletRequest req, String primaryKey) {
         String idConfezione = req.getParameter("idConfezione");
         String pesoConfezione = req.getParameter("pesoConfezione");
 
-        if (isValid(List.of(idConfezione, pesoConfezione)) && Integer.parseInt(pesoConfezione) > 0) {
-            Confezione confezione = new Confezione();
-            confezione.setIdConfezione(Integer.parseInt(idConfezione));
-            confezione.setPeso(Integer.parseInt(pesoConfezione));
+        if (isValid(Arrays.asList(idConfezione, pesoConfezione))) {
+            try {
+                if (Integer.parseInt(pesoConfezione) > 0) {
+                    Confezione confezione = new Confezione();
+                    confezione.setIdConfezione(Integer.parseInt(idConfezione));
+                    confezione.setPeso(Integer.parseInt(pesoConfezione));
 
-            ConfezioneDAO confezioneDAO = new ConfezioneDAO();
-            confezioneDAO.doUpdateConfezione(confezione, Integer.parseInt(primaryKey));
-            return true;
+                    ConfezioneDAO confezioneDAO = new ConfezioneDAO();
+                    confezioneDAO.doUpdateConfezione(confezione, Integer.parseInt(primaryKey));
+                    return true;
+                }
+            } catch (NumberFormatException e) {
+                e.printStackTrace();
+                return false;
+            }
         }
         return false;
     }

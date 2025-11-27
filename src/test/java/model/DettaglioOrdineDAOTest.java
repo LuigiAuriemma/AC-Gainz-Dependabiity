@@ -36,7 +36,8 @@ class DettaglioOrdineDAOTest {
             mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
 
             // Usiamo contains perché la query è molto lunga
-            when(mockConnection.prepareStatement(contains("SELECT dettaglio_ordine.*"))).thenReturn(mockPreparedStatement);
+            when(mockConnection.prepareStatement(contains("SELECT dettaglio_ordine.*")))
+                    .thenReturn(mockPreparedStatement);
             when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
 
             when(mockResultSet.next()).thenReturn(true, false);
@@ -45,7 +46,8 @@ class DettaglioOrdineDAOTest {
             when(mockResultSet.getInt("id_ordine")).thenReturn(idOrdine);
             when(mockResultSet.getString("id_prodotto")).thenReturn("PROD1");
 
-            // Mock dei dati da JOIN (campi che non sono nella tabella dettaglio_ordine base)
+            // Mock dei dati da JOIN (campi che non sono nella tabella dettaglio_ordine
+            // base)
             when(mockResultSet.getString("nomeGusto")).thenReturn("Cioccolato");
             when(mockResultSet.getInt("peso")).thenReturn(1000);
             when(mockResultSet.getString("nome")).thenReturn("Protein Powder"); // Nome prodotto
@@ -201,7 +203,8 @@ class DettaglioOrdineDAOTest {
             assertFalse(sql.contains("quantità"), "La query NON deve includere 'quantità' se 0");
             assertFalse(sql.contains("prezzo"), "La query NON deve includere 'prezzo' se 0");
 
-            // Verifiche Parametri: Solo 3 parametri attesi (id_ordine, id_prodotto, id_variante)
+            // Verifiche Parametri: Solo 3 parametri attesi (id_ordine, id_prodotto,
+            // id_variante)
             verify(mockPreparedStatement).setObject(eq(1), eq(1));
             verify(mockPreparedStatement).setObject(eq(2), eq("P1"));
             verify(mockPreparedStatement).setObject(eq(3), eq(2));
@@ -225,6 +228,88 @@ class DettaglioOrdineDAOTest {
 
             assertEquals(1, result.size());
             assertEquals(99, result.get(0).getIdOrdine());
+        }
+    }
+
+    // --- NEW TESTS ---
+
+    @Test
+    void doRetrieveById_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRetrieveById(1));
+        }
+    }
+
+    @Test
+    void doRetrieveByIdOrderAndIdVariant_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRetrieveByIdOrderAndIdVariant(1, 1));
+        }
+    }
+
+    @Test
+    void doRetrieveAll_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRetrieveAll());
+        }
+    }
+
+    @Test
+    void doUpdateDettaglioOrdine_SQLException() throws SQLException {
+        DettaglioOrdine d = new DettaglioOrdine();
+        d.setIdOrdine(1);
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doUpdateDettaglioOrdine(d, 1, "P1", 1));
+        }
+    }
+
+    @Test
+    void doRemoveDettaglioOrdine_SQLException() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doRemoveDettaglioOrdine(1, 1));
+        }
+    }
+
+    @Test
+    void doSave_SQLException() throws SQLException {
+        DettaglioOrdine d = new DettaglioOrdine();
+        d.setIdOrdine(1);
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString(), eq(Statement.RETURN_GENERATED_KEYS)))
+                    .thenThrow(new SQLException("DB Error"));
+
+            assertThrows(RuntimeException.class, () -> dao.doSave(d));
+        }
+    }
+
+    @Test
+    void doSave_InsertError() throws SQLException {
+        DettaglioOrdine d = new DettaglioOrdine();
+        d.setIdOrdine(1);
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString(), eq(Statement.RETURN_GENERATED_KEYS)))
+                    .thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeUpdate()).thenReturn(0); // Simulate failure
+
+            RuntimeException e = assertThrows(RuntimeException.class, () -> dao.doSave(d));
+            assertEquals("INSERT error.", e.getMessage());
         }
     }
 }

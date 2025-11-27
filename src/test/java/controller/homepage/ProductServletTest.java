@@ -23,7 +23,8 @@ import static org.mockito.Mockito.*;
 
 /**
  * Classe di test per ProductServlet.
- * Testa i percorsi di fallimento (null key, prodotto non trovato, varianti vuote)
+ * Testa i percorsi di fallimento (null key, prodotto non trovato, varianti
+ * vuote)
  * e il percorso di successo (happy path).
  */
 public class ProductServletTest {
@@ -49,7 +50,8 @@ public class ProductServletTest {
     @Test
     @DisplayName("doPost deve delegare a doGet")
     void doPost_delegatesToDoGet() throws ServletException, IOException {
-        // Usiamo uno 'spy' per verificare la chiamata a un altro metodo della stessa classe
+        // Usiamo uno 'spy' per verificare la chiamata a un altro metodo della stessa
+        // classe
         ProductServlet spyServlet = spy(new ProductServlet());
         spyServlet.doPost(request, response);
         verify(spyServlet).doGet(request, response);
@@ -89,7 +91,7 @@ public class ProductServletTest {
             // Stub: doRetrieveById restituisce null
             when(mock.doRetrieveById(primaryKey)).thenReturn(null);
         });
-             MockedConstruction<VarianteDAO> mockedVarDao = mockConstruction(VarianteDAO.class)) {
+                MockedConstruction<VarianteDAO> mockedVarDao = mockConstruction(VarianteDAO.class)) {
 
             servlet.doGet(request, response);
 
@@ -123,7 +125,7 @@ public class ProductServletTest {
         try (MockedConstruction<ProdottoDAO> mockedProdDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
             when(mock.doRetrieveById(primaryKey)).thenReturn(mockProdotto);
         });
-             MockedConstruction<VarianteDAO> mockedVarDao = mockConstruction(VarianteDAO.class)) {
+                MockedConstruction<VarianteDAO> mockedVarDao = mockConstruction(VarianteDAO.class)) {
 
             // VERIFICA CHIAVE: ci aspettiamo un crash
             // Questo accade perché il codice chiama varianti.get(0).getGusto()
@@ -152,15 +154,23 @@ public class ProductServletTest {
         when(mockProdotto.getCategoria()).thenReturn("Proteine");
 
         // Varianti (con duplicati di gusto e peso)
-        Variante v1 = new Variante(); v1.setGusto("Cioccolato"); v1.setPesoConfezione(900);
-        Variante v2 = new Variante(); v2.setGusto("Vaniglia"); v2.setPesoConfezione(1000);
-        Variante v3 = new Variante(); v3.setGusto("Cioccolato"); v3.setPesoConfezione(500);
+        Variante v1 = new Variante();
+        v1.setGusto("Cioccolato");
+        v1.setPesoConfezione(900);
+        Variante v2 = new Variante();
+        v2.setGusto("Vaniglia");
+        v2.setPesoConfezione(1000);
+        Variante v3 = new Variante();
+        v3.setGusto("Cioccolato");
+        v3.setPesoConfezione(500);
         List<Variante> varianti = List.of(v1, v2, v3);
         when(mockProdotto.getVarianti()).thenReturn(varianti);
 
         // Il codice prende il gusto di varianti.get(0) ("Cioccolato")
         // Lista fittizia di ritorno per i pesi al "Cioccolato"
-        List<Variante> variantiCriteria = List.of(v1, v3); // Pesi 900 e 500
+        // Aggiungiamo un duplicato (v1 ha peso 900) per testare il ramo if
+        // (!pesi.contains(...))
+        List<Variante> variantiCriteria = List.of(v1, v3, v1); // Pesi 900, 500, 900 (duplicato)
 
         // Lista fittizia di ritorno per i suggeriti
         List<Prodotto> suggeriti = List.of(mock(Prodotto.class), mock(Prodotto.class));
@@ -171,9 +181,10 @@ public class ProductServletTest {
             when(mock.doRetrieveById(primaryKey)).thenReturn(mockProdotto);
             when(mock.doRetrieveByCriteria("categoria", "Proteine")).thenReturn(suggeriti);
         });
-             MockedConstruction<VarianteDAO> mockedVarDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                 when(mock.doRetrieveVariantByCriteria("S123", "flavour", "Cioccolato")).thenReturn(variantiCriteria);
-             })) {
+                MockedConstruction<VarianteDAO> mockedVarDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+                    when(mock.doRetrieveVariantByCriteria("S123", "flavour", "Cioccolato"))
+                            .thenReturn(variantiCriteria);
+                })) {
 
             // --- 3. Esecuzione ---
             servlet.doGet(request, response);
