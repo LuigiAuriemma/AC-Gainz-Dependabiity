@@ -488,10 +488,13 @@ public class CarrelloServletTest {
         void add_invalidWeight_doesNothing() throws ServletException, IOException {
             when(request.getParameter("pesoConfezione")).thenReturn("abc");
 
-            servlet.doGet(request, response);
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class);
+                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class)) {
+                servlet.doGet(request, response);
 
-            assertTrue(getJsonOutput().isEmpty());
-            verify(session, never()).setAttribute(anyString(), any());
+                assertTrue(getJsonOutput().isEmpty());
+                verify(session, never()).setAttribute(anyString(), any());
+            }
         }
 
         @Test
@@ -780,8 +783,11 @@ public class CarrelloServletTest {
         @DisplayName("(Regola) Peso non valido -> Non fa nulla")
         void remove_invalidWeight_doesNothing() throws ServletException, IOException {
             when(request.getParameter("pesoConfezione")).thenReturn("abc");
-            servlet.doGet(request, response);
-            assertTrue(getJsonOutput().isEmpty());
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class);
+                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class)) {
+                servlet.doGet(request, response);
+                assertTrue(getJsonOutput().isEmpty());
+            }
         }
 
         @Test
@@ -911,16 +917,22 @@ public class CarrelloServletTest {
         @DisplayName("(Regola) ID null -> Non fa nulla")
         void remove_nullId_doesNothing() throws ServletException, IOException {
             when(request.getParameter("id")).thenReturn(null);
-            servlet.doGet(request, response);
-            assertTrue(getJsonOutput().isEmpty());
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class);
+                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class)) {
+                servlet.doGet(request, response);
+                assertTrue(getJsonOutput().isEmpty());
+            }
         }
 
         @Test
         @DisplayName("(Regola) Peso null -> Non fa nulla")
         void remove_nullWeight_doesNothing() throws ServletException, IOException {
             when(request.getParameter("pesoConfezione")).thenReturn(null);
-            servlet.doGet(request, response);
-            assertTrue(getJsonOutput().isEmpty());
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class);
+                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class)) {
+                servlet.doGet(request, response);
+                assertTrue(getJsonOutput().isEmpty());
+            }
         }
 
         @Test
@@ -1178,8 +1190,11 @@ public class CarrelloServletTest {
         @DisplayName("(Regola) Peso non valido -> Non fa nulla")
         void quantity_invalidWeight_doesNothing() throws ServletException, IOException {
             when(request.getParameter("pesoConfezione")).thenReturn("abc");
-            servlet.doGet(request, response);
-            assertTrue(getJsonOutput().isEmpty());
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class);
+                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class)) {
+                servlet.doGet(request, response);
+                assertTrue(getJsonOutput().isEmpty());
+            }
         }
 
         @Test
