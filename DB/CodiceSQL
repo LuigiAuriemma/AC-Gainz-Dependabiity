@@ -1,4 +1,4 @@
-SET NAMES utf8mb4;
+    SET NAMES utf8mb4;
 SET collation_connection = 'utf8mb4_unicode_ci';
 
 drop database if exists Progetto_TSW_Dependability;
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS dettaglio_ordine(
 )
 ;
 
-DELIMITER $$
+DELIMITER ;
 
 CREATE TRIGGER updatePriceDettaglioOrdine
 BEFORE INSERT ON dettaglio_ordine
@@ -111,7 +111,7 @@ BEGIN
     -- Assegniamo il prezzo calcolato alla riga che sta per essere inserita
     SET NEW.prezzo = price;
 
-END$$
+END;
 
 
 CREATE TRIGGER updatePriceDettaglioOrdineBeforeUpdate
@@ -129,7 +129,7 @@ BEGIN
 
     -- Assegniamo il prezzo calcolato alla riga che sta per essere aggiornata
     SET NEW.prezzo = price;
-END$$
+END;
 
 
 CREATE TRIGGER aggiorna_prezzo_ordine_onUpdate
@@ -149,7 +149,7 @@ BEGIN
     UPDATE ordine
     SET totale = total
     WHERE id_ordine = NEW.id_ordine;  -- Utilizziamo l'id_ordine della nuova riga inserita
-END$$
+END;
 
 
 CREATE TRIGGER aggiorna_prezzo_ordine
@@ -169,7 +169,7 @@ BEGIN
     UPDATE ordine
     SET totale = total
     WHERE id_ordine = NEW.id_ordine;  -- Utilizziamo l'id_ordine della nuova riga inserita
-END$$
+END;
 
 
 
@@ -206,7 +206,7 @@ BEGIN
     WHERE o.id_ordine IN (
         SELECT id_ordine FROM dettaglio_ordine WHERE id_prodotto = OLD.id_prodotto
     );
-END$$
+END;
 
 CREATE TRIGGER aggiornaQuantitaVariante
 AFTER INSERT ON dettaglio_ordine
@@ -222,7 +222,7 @@ BEGIN
     UPDATE variante
     SET `quantità` = `quantità` - q
     WHERE id_variante = NEW.id_variante;
-END$$
+END;
 
 DELIMITER ;
 

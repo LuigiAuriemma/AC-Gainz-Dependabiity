@@ -11,8 +11,8 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @Fork(1)
-@Warmup(iterations = 2, time = 1)
-@Measurement(iterations = 5, time = 1)
+@Warmup(iterations = 20, time = 1)
+@Measurement(iterations = 15, time = 1)
 public class OrderParsingBenchmark {
 
     private String descrizioneOrdineComplesso;

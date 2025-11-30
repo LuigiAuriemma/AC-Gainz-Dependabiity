@@ -15,8 +15,8 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS) // Misuriamo in microsecondi (è codice veloce)
 @Fork(1)
-@Warmup(iterations = 2, time = 1)
-@Measurement(iterations = 5, time = 1)
+@Warmup(iterations = 15, time = 1)
+@Measurement(iterations =  10, time = 1)
 
 // BENCHMARK SULLA LOGICA DI CREAZIONE ORDINE (tratta dalla doPost di OrdineServlet)
 public class OrderProcessingBenchmark {

@@ -15,8 +15,8 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS) // Misuriamo in microsecondi
 @Fork(1)
-@Warmup(iterations = 2, time = 1)
-@Measurement(iterations = 5, time = 1)
+@Warmup(iterations = 20, time = 1)
+@Measurement(iterations = 15, time = 1)
 
 //BENCHMARK SUL METODO getJsonObject IN Filters.GenericFilterServlet
 public class JsonFilterBenchmark {

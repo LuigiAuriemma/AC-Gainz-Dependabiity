@@ -1,6 +1,7 @@
 package benchmark;
 
 import org.openjdk.jmh.annotations.*;
+import org.openjdk.jmh.infra.Blackhole;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -8,58 +9,55 @@ import java.util.concurrent.TimeUnit;
 
 @State(Scope.Thread)
 @BenchmarkMode(Mode.AverageTime)
-@OutputTimeUnit(TimeUnit.MICROSECONDS) // Misuriamo in microsecondi
+@OutputTimeUnit(TimeUnit.MICROSECONDS)
 @Fork(1)
-@Warmup(iterations = 2, time = 1)
-@Measurement(iterations = 5, time = 1)
+@Warmup(iterations = 10, time = 1)
+@Measurement(iterations = 10, time = 1)
 public class BatchQueryBenchmark {
 
     private List<String> cartItems;
 
-    // Simuliamo una latenza di rete molto bassa (0.05 millisecondi)
-    // In un DB reale su server remoto, questo valore sarebbe molto più alto (es. 20-30ms)
-    // rendendo la differenza ancora più abissale.
-    private static final int SIMULATED_DB_LATENCY_NS = 50_000; // 50 microsecondi
+    // SIMULAZIONE COSTO DB
+    // Questo valore rappresenta il "lavoro" o l'attesa per comunicare col DB.
+    // Più è alto, più evidente sarà il problema dell'N+1.
+    private static final int DB_LATENCY_TOKENS = 5000;
 
     @Setup
     public void setup() {
-        // Simuliamo un carrello con 20 prodotti
+        // Carrello con 20 prodotti
         cartItems = new ArrayList<>();
         for (int i = 0; i < 20; i++) {
-            cartItems.add("Prodotto_ID_" + i);
+            cartItems.add("PROD_ID_" + i);
         }
     }
 
-    // --- METODO 1: Approccio N+1 (Quello della LogoutServlet attuale) ---
-    // Problema: Paga il costo della latenza (simulateDbCall) per OGNI prodotto.
+    // --- METODO 1: N+1 Problem (Query nel ciclo) ---
+    // Qui paghiamo la latenza per OGNI prodotto (20 volte)
     @Benchmark
-    public int testLoopInsert() {
-        int processed = 0;
+    public void testLoopInsert_WithLatency(Blackhole bh) {
         for (String item : cartItems) {
-            // 1. Costruiamo la query singola (CPU)
             String sql = "INSERT INTO carrello (id_utente, id_prodotto) VALUES (1, '" + item + "')";
 
-
-            processed++;
+            // SIMULIAMO LA CHIAMATA AL DB (Latenza pagata 20 volte)
+            bh.consumeCPU(DB_LATENCY_TOKENS);
         }
-        return processed;
     }
 
-    // --- METODO 2: Approccio Batch (Ottimizzato) ---
-    // Vantaggio: Paga il costo della latenza UNA volta sola per tutto il carrello.
+    // --- METODO 2: Batch Optimization (Query unica) ---
+    // Qui paghiamo la latenza UNA sola volta per tutto il carrello
     @Benchmark
-    public int testBatchInsert() {
-        // 1. Costruiamo l'unica query gigante (CPU - leggermente più costoso qui)
+    public void testBatchInsert_WithLatency(Blackhole bh) {
         StringBuilder sql = new StringBuilder("INSERT INTO carrello (id_utente, id_prodotto) VALUES ");
-        for (int i = 0; i < cartItems.size(); i++) {
+
+        int size = cartItems.size();
+        for (int i = 0; i < size; i++) {
             sql.append("(1, '").append(cartItems.get(i)).append("')");
-            if (i < cartItems.size() - 1) {
+            if (i < size - 1) {
                 sql.append(", ");
             }
         }
 
-        return 1;
+        // SIMULIAMO LA CHIAMATA AL DB (Latenza pagata 1 volta sola)
+        bh.consumeCPU(DB_LATENCY_TOKENS);
     }
 }
-
-
