@@ -93,6 +93,7 @@
             <version>1.37</version>
             <scope>test</scope>
         </dependency>
+
             <dependency>
                 <groupId>org.glassfish.web</groupId>
                 <artifactId>jakarta.servlet.jsp.jstl</artifactId>

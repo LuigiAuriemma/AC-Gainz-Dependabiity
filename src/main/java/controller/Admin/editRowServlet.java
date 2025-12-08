@@ -18,6 +18,13 @@ import java.util.List;
 @WebServlet(value = "/editRow")
 @MultipartConfig
 public class editRowServlet extends HttpServlet {
+
+    // Lista dei nomi di tabella validi
+    private static final List<String> VALID_TABLE_NAMES = List.of(
+            "utente", "prodotto", "variante", "ordine",
+            "dettaglioOrdine", "gusto", "confezione"
+    );
+
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         // prende il nome della tabella e la primarykey dalla request
@@ -26,6 +33,12 @@ public class editRowServlet extends HttpServlet {
 
         if (tableName == null || tableName.isBlank() || primaryKey == null || primaryKey.isBlank()) {
             resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parametri 'tableName' o 'primaryKey' mancanti.");
+            return;
+        }
+
+        // Validazione whitelist
+        if (tableName == null || !VALID_TABLE_NAMES.contains(tableName)) {
+            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
             return;
         }
 
@@ -50,8 +63,6 @@ public class editRowServlet extends HttpServlet {
                 success = editGusto(req, primaryKey);
             case "confezione" ->
                 success = editConfezione(req, primaryKey);
-            default ->
-                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
         }
 
         // se ha funzionato tutto correttamente mostra la tabella
