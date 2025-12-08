@@ -23,6 +23,13 @@ import java.util.List;
 @WebServlet("/insertRow")
 @MultipartConfig
 public class insertRowServlet extends HttpServlet {
+
+    // Lista dei nomi di tabella validi
+    private static final List<String> VALID_TABLE_NAMES = List.of(
+            "utente", "prodotto", "variante", "ordine",
+            "dettaglioOrdine", "gusto", "confezione"
+    );
+
     private static final String CARTELLA_UPLOAD = "Immagini";
 
     @Override
@@ -38,6 +45,12 @@ public class insertRowServlet extends HttpServlet {
         if (nameTable == null || nameTable.isBlank()) {
             resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parametro 'nameTable' mancante.");
             return; // Interrompe l'esecuzione del metodo
+        }
+
+        // Validazione whitelist
+        if (nameTable == null || !VALID_TABLE_NAMES.contains(nameTable)) {
+            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
+            return;
         }
 
         boolean success = false;
@@ -59,11 +72,6 @@ public class insertRowServlet extends HttpServlet {
                 success = insertGusto(req);
             case "confezione" ->
                 success = insertConfezione(req);
-
-            default -> {
-                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
-                return;
-            }
         }
 
         // se ha funzionato tutto correttamente mostra la tabella
