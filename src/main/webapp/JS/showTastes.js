@@ -26,7 +26,7 @@ function updateSelectView(response) {
     gusti.forEach(gusto => {
         const option = document.createElement("option");
         option.value = gusto;
-        option.innerHTML = gusto;
+        option.innerText = gusto;
         select.appendChild(option);
     });
 

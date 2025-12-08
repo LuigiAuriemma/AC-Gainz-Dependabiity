@@ -92,17 +92,34 @@ function deleteTableRow(nameTable, primaryKey) {
     if (confirm("Vuoi davvero eliminare questa riga?")) {
         fetch("deleteRow?" + urlSearch.toString())
             .then(response => {
+                // --- SECURITY FIX START ---
                 if (response.redirected) {
-                    console.log("response redirected");
-                    window.location.href = response.url;
-                    return; // Interrompe l'esecuzione se c'è un redirect
+                    console.log("Response redirected");
+                    
+                    // Parse the new URL
+                    const potentialRedirect = new URL(response.url);
+                    
+                    // Check if the redirect matches your current origin (Domain, Protocol, Port)
+                    if (potentialRedirect.origin === window.location.origin) {
+                        window.location.href = response.url;
+                    } else {
+                        console.error("Blocked unsafe redirect to: ", response.url);
+                        // Optional: Show an error message to the user
+                        alert("Security Warning: Attempted redirect to an external site blocked.");
+                    }
+                    return; 
                 }
+                // --- SECURITY FIX END ---
+
                 if (!response.ok) throw new Error(`Network error: ${response.status} - ${response.statusText}`);
                 return response.json();
             })
             .then(responseData => {
-                console.log(responseData);
-                updateTableView(nameTable, responseData);
+                // Check if responseData exists before using it to prevent errors if the redirect block triggered
+                if(responseData) {
+                    console.log(responseData);
+                    updateTableView(nameTable, responseData);
+                }
             })
             .catch(error => {
                 console.error(error);
@@ -147,18 +164,8 @@ function updateConfezioneView(table, data){
         pesoConfezioneCell.innerText = confezione.pesoConfezione ?? 'undefined';
 
         let actionCell = row.insertCell();
-        let editBtn = document.createElement("button");
-        editBtn.className = "button";
-        editBtn.innerText = "Modifica";
-        editBtn.onclick = function() { editTableRow('confezione', confezione.idConfezione); };
-        
-        let deleteBtn = document.createElement("button");
-        deleteBtn.className = "button";
-        deleteBtn.innerText = "Elimina";
-        deleteBtn.onclick = function() { deleteTableRow('confezione', confezione.idConfezione); };
-        
-        actionCell.appendChild(editBtn);
-        actionCell.appendChild(deleteBtn);
+        actionCell.innerHTML = `<button class="button" onclick="editTableRow('confezione', '${confezione.idConfezione}')">Modifica</button>
+                                <button class="button" onclick="deleteTableRow('confezione', '${confezione.idConfezione}')">Elimina</button>`;
     });
     // Aggiungi la riga del pulsante "add"
     let addRow1 = table.insertRow();
@@ -183,18 +190,8 @@ function updateGustoView(table, data){
         nomeGustoCell.innerText = gusto.nomeGusto  ?? 'undefined';
 
         let actionCell = row.insertCell();
-        let editBtn = document.createElement("button");
-        editBtn.className = "button";
-        editBtn.innerText = "Modifica";
-        editBtn.onclick = function() { editTableRow('gusto', gusto.idGusto); };
-        
-        let deleteBtn = document.createElement("button");
-        deleteBtn.className = "button";
-        deleteBtn.innerText = "Elimina";
-        deleteBtn.onclick = function() { deleteTableRow('gusto', gusto.idGusto); };
-        
-        actionCell.appendChild(editBtn);
-        actionCell.appendChild(deleteBtn);
+        actionCell.innerHTML = `<button class="button" onclick="editTableRow('gusto', '${gusto.idGusto}')">Modifica</button>
+                                <button class="button" onclick="deleteTableRow('gusto', '${gusto.idGusto}')">Elimina</button>`;
     });
 
     // Aggiungi la riga del pulsante "add"
@@ -226,20 +223,8 @@ function updateDettaglioOrdiniView(table, data){
         prezzoCell.innerText = dettaglioOrdine.prezzo ?? 'undefined';
 
         let actionCell = row.insertCell();
-        let primaryKey = dettaglioOrdine.idOrdine + ", " + dettaglioOrdine.idProdotto + ", " + dettaglioOrdine.idVariante;
-        
-        let editBtn = document.createElement("button");
-        editBtn.className = "button";
-        editBtn.innerText = "Modifica";
-        editBtn.onclick = function() { editTableRow('dettaglioOrdine', primaryKey); };
-        
-        let deleteBtn = document.createElement("button");
-        deleteBtn.className = "button";
-        deleteBtn.innerText = "Elimina";
-        deleteBtn.onclick = function() { deleteTableRow('dettaglioOrdine', primaryKey); };
-        
-        actionCell.appendChild(editBtn);
-        actionCell.appendChild(deleteBtn);
+        actionCell.innerHTML = `<button class="button" onclick="editTableRow('dettaglioOrdine', '${dettaglioOrdine.idOrdine}, ${dettaglioOrdine.idProdotto}, ${dettaglioOrdine.idVariante}')">Modifica</button>
+                                <button class="button" onclick="deleteTableRow('dettaglioOrdine', '${dettaglioOrdine.idOrdine}, ${dettaglioOrdine.idProdotto}, ${dettaglioOrdine.idVariante}')">Elimina</button>`;
     });
 
     // Aggiungi la riga del pulsante "add"
@@ -273,27 +258,14 @@ function updateOrdiniView(table, data) {
         totaleCell.innerText = ordine.totale ?? 'undefined';
         let descrizioneCell = row.insertCell();
         if (ordine.descrizione) {
-            descrizioneCell.innerText = ordine.descrizione;
+            descrizioneCell.innerText= `${ordine.descrizione}`;
         } else {
-            let link = document.createElement("a");
-            link.href = "showTable?tableName=dettaglioOrdine";
-            link.innerText = "Dettaglio ordine";
-            descrizioneCell.appendChild(link);
+            descrizioneCell.innerHTML = `<a href="showTable?tableName=dettaglioOrdine">Dettaglio ordine</a>`;
         }
 
         let actionCell = row.insertCell();
-        let editBtn = document.createElement("button");
-        editBtn.className = "button";
-        editBtn.innerText = "Modifica";
-        editBtn.onclick = function() { editTableRow('ordine', ordine.idOrdine); };
-        
-        let deleteBtn = document.createElement("button");
-        deleteBtn.className = "button";
-        deleteBtn.innerText = "Elimina";
-        deleteBtn.onclick = function() { deleteTableRow('ordine', ordine.idOrdine); };
-        
-        actionCell.appendChild(editBtn);
-        actionCell.appendChild(deleteBtn);
+        actionCell.innerHTML = `<button class="button" onclick="editTableRow('ordine', '${ordine.idOrdine}')">Modifica</button>
+                                <button class="button" onclick="deleteTableRow('ordine', '${ordine.idOrdine}')">Elimina</button>`;
     });
 
     // Aggiungi la riga del pulsante "add"
@@ -330,19 +302,8 @@ function updateVarianteView(table, data) {
         let evidenzaCell = row.insertCell();
         evidenzaCell.innerText = variante.evidenza ?? 'undefined';
         let actionCell = row.insertCell();
-        
-        let editBtn = document.createElement("button");
-        editBtn.className = "button";
-        editBtn.innerText = "Modifica";
-        editBtn.onclick = function() { editTableRow('variante', variante.idVariante); };
-        
-        let deleteBtn = document.createElement("button");
-        deleteBtn.className = "button";
-        deleteBtn.innerText = "Elimina";
-        deleteBtn.onclick = function() { deleteTableRow('variante', variante.idVariante); };
-        
-        actionCell.appendChild(editBtn);
-        actionCell.appendChild(deleteBtn);
+        actionCell.innerHTML = `<button class="button" onclick="editTableRow('variante', '${variante.idVariante}')">Modifica</button>
+                                <button class="button" onclick="deleteTableRow('variante', '${variante.idVariante}')">Elimina</button>`;
     });
 
     // Aggiungi la riga del pulsante "add" indietro
@@ -380,19 +341,10 @@ function updateProductView(table, data) {
         grassiCell.innerText = product.grassi ?? 'undefined';
         let actionCell = row.insertCell();
         actionCell.className = "center";
-        
-        let editBtn = document.createElement("button");
-        editBtn.className = "button";
-        editBtn.innerText = "Modifica";
-        editBtn.onclick = function() { editTableRow('prodotto', product.idProdotto); };
-        
-        let deleteBtn = document.createElement("button");
-        deleteBtn.className = "button";
-        deleteBtn.innerText = "Elimina";
-        deleteBtn.onclick = function() { deleteTableRow('prodotto', product.idProdotto); };
-        
-        actionCell.appendChild(editBtn);
-        actionCell.appendChild(deleteBtn);
+        actionCell.innerHTML = `
+            <button class="button" onclick="editTableRow('prodotto', '${product.idProdotto}')">Modifica</button>
+            <button class="button" onclick="deleteTableRow('prodotto', '${product.idProdotto}')">Elimina</button>
+        `;
     });
 
     // Aggiungi la riga del pulsante "add" indietro
@@ -413,34 +365,25 @@ function updateUserView(table, data) {
     data.forEach(user => {
         let row = table.insertRow();
         let emailCell = row.insertCell();
-        emailCell.innerText = user.email || 'undefined';
+        emailCell.innerHTML = user.email || 'undefined';
         let nomeCell = row.insertCell();
-        nomeCell.innerText = user.nome || 'undefined';
+        nomeCell.innerHTML = user.nome || 'undefined';
         let cognomeCell = row.insertCell();
-        cognomeCell.innerText = user.cognome || 'undefined';
+        cognomeCell.innerHTML = user.cognome || 'undefined';
         let codiceFiscaleCell = row.insertCell();
-        codiceFiscaleCell.innerText = user.codiceFiscale || 'undefined';
+        codiceFiscaleCell.innerHTML = user.codiceFiscale || 'undefined';
         let dataDiNascitaCell = row.insertCell();
-        dataDiNascitaCell.innerText = user.dataDiNascita || 'undefined';
+        dataDiNascitaCell.innerHTML = user.dataDiNascita || 'undefined';
         let indirizzoCell = row.insertCell();
-        indirizzoCell.innerText = user.indirizzo || 'undefined';
+        indirizzoCell.innerHTML = user.indirizzo || 'undefined';
         let telefonoCell = row.insertCell();
-        telefonoCell.innerText = user.telefono || 'undefined';
+        telefonoCell.innerHTML = user.telefono || 'undefined';
         let actionCell = row.insertCell();
         actionCell.className = "center";
-        
-        let editBtn = document.createElement("button");
-        editBtn.className = "button";
-        editBtn.innerText = "Modifica";
-        editBtn.onclick = function() { editTableRow('utente', user.email); };
-        
-        let deleteBtn = document.createElement("button");
-        deleteBtn.className = "button";
-        deleteBtn.innerText = "Elimina";
-        deleteBtn.onclick = function() { deleteTableRow('utente', user.email); };
-        
-        actionCell.appendChild(editBtn);
-        actionCell.appendChild(deleteBtn);
+        actionCell.innerHTML = `
+            <button class="button" onclick="editTableRow('utente', '${user.email}')">Modifica</button>
+            <button class="button" onclick="deleteTableRow('utente', '${user.email}')">Elimina</button>
+        `;
     });
 
     // Aggiungi la riga del pulsante "add" indietro
