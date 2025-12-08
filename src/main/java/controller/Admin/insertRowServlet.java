@@ -27,7 +27,7 @@ public class insertRowServlet extends HttpServlet {
     // Lista dei nomi di tabella validi
     private static final List<String> VALID_TABLE_NAMES = List.of(
             "utente", "prodotto", "variante", "ordine",
-            "dettaglioOrdine", "gusto", "confezione"
+            "dettagliOrdine", "gusto", "confezione"
     );
 
     private static final String CARTELLA_UPLOAD = "Immagini";
