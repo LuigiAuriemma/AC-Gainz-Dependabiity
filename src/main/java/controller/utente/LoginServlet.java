@@ -10,6 +10,7 @@ import model.Carrello;
 import model.CarrelloDAO;
 import model.Utente;
 import model.UtenteDAO;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -21,13 +22,12 @@ import java.util.regex.Pattern;
 @WebServlet(value = "/login")
 public class LoginServlet extends HttpServlet {
     public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
-        // RIGA 24 FIX: Gestione eccezioni super.doGet
         try {
             super.doGet(request, response);
         } catch (ServletException | IOException e) {
             log("Errore in LoginServlet doGet", e);
             if (!response.isCommitted()) {
-                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }
@@ -48,7 +48,6 @@ public class LoginServlet extends HttpServlet {
             //nel caso il pattern dell'email non fosse rispettato
             if (!emailMatcher.matches()) {
                 request.setAttribute("patternEmail", "Pattern email non rispettato!");
-                // RIGA 44 FIX: Gestione forward
                 request.getRequestDispatcher("Login.jsp").forward(request, response);
                 request.removeAttribute("patternEmail");
                 return;
@@ -62,7 +61,6 @@ public class LoginServlet extends HttpServlet {
             //nel caso il pattern della password non fosse rispettato
             if (!passwordMatcher.matches()) {
                 request.setAttribute("patternPassword", "Pattern password non rispettato!");
-                // RIGA 58 FIX: Gestione forward
                 request.getRequestDispatcher("Login.jsp").forward(request, response);
                 request.removeAttribute("patternPassword");
                 return;
@@ -72,7 +70,6 @@ public class LoginServlet extends HttpServlet {
             // e faccio uscire un messaggio di errore
             if (utenteDAO.doRetrieveByEmail(email) == null) {
                 request.setAttribute("userNotFound", "Utente non registrato!");
-                // RIGA 67 FIX: Gestione forward
                 request.getRequestDispatcher("Login.jsp").forward(request, response);
                 request.removeAttribute("userNotFound");
                 return;
@@ -80,11 +77,10 @@ public class LoginServlet extends HttpServlet {
 
             Utente x = null;
             try {
-                // RIGA 76 FIX: Gestione SQLException interna
                 x = utenteDAO.doRetrieveByEmailAndPassword(email, password);
             } catch (SQLException e) {
                 log("Errore SQL durante il login", e);
-                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore database.");
+                ServletUtils.sendErrorSafe(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore database.");
                 return;
             }
 
@@ -92,7 +88,6 @@ public class LoginServlet extends HttpServlet {
             // per cui faccio ciò che ho fatto prima, con un messaggio di errore evidentemente diverso
             if (x == null) {
                 request.setAttribute("wrongPassword", "Password errata!");
-                // RIGA 83 FIX: Gestione forward
                 request.getRequestDispatcher("Login.jsp").forward(request, response);
                 request.removeAttribute("wrongPassword");
                 return;
@@ -135,13 +130,12 @@ public class LoginServlet extends HttpServlet {
             session.setAttribute("cart", dbCart);
 
             // Redirect to the index page
-            // RIGA 127 FIX: Gestione forward finale
             request.getRequestDispatcher("index.jsp").forward(request, response);
 
         } catch (Exception e) {
             log("Errore critico in LoginServlet doPost", e);
             if (!response.isCommitted()) {
-                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante il login.");
+                ServletUtils.sendErrorSafe(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante il login.");
             }
         }
     }

@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import model.Utente;
 import model.UtenteDAO;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.math.BigInteger;
@@ -31,7 +32,7 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
         } catch (ServletException | IOException e) {
             log("Errore in doGet ModificaDatiUtenteServlet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }
@@ -43,7 +44,7 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
         } catch (Exception e) {
             log("Errore in doPost ModificaDatiUtenteServlet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la modifica dei dati.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la modifica dei dati.");
             }
         }
     }

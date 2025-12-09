@@ -11,6 +11,7 @@ import model.ProdottoDAO;
 import model.Variante;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -45,7 +46,7 @@ public class GenericFilterServlet extends HttpServlet {
                 } catch (SQLException | ServletException | IOException e) {
                     log("Errore in handleNameForm", e);
                     if (!resp.isCommitted()) {
-                        resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la ricerca.");
+                        ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la ricerca.");
                     }
                 }
                 return;
@@ -76,7 +77,7 @@ public class GenericFilterServlet extends HttpServlet {
             } catch (SQLException e) {
                 log("Errore in filterProducts", e);
                 if (!resp.isCommitted()) {
-                    resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante il filtraggio.");
+                    ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante il filtraggio.");
                 }
                 return;
             }
@@ -159,7 +160,7 @@ public class GenericFilterServlet extends HttpServlet {
         } catch (ServletException | IOException e) {
             log("Errore in GenericFilterServlet doPost", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }

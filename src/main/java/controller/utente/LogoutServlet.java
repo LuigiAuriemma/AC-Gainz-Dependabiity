@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpSession;
 import model.Carrello;
 import model.CarrelloDAO;
 import model.Utente;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -46,7 +47,6 @@ public class LogoutServlet extends HttpServlet {
                 session.removeAttribute("Utente");
                 req.getSession().invalidate();
 
-                // RIGA 50 FIX: Gestione eccezioni per il forward
                 RequestDispatcher requestDispatcher = req.getRequestDispatcher("index.jsp");
                 requestDispatcher.forward(req, resp);
             } else {
@@ -56,20 +56,19 @@ public class LogoutServlet extends HttpServlet {
         } catch (Exception e) {
             log("Errore in LogoutServlet doGet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante il logout.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante il logout.");
             }
         }
     }
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        // RIGA 56 FIX: Gestione eccezioni per doPost
         try {
             doGet(req, resp);
         } catch (ServletException | IOException e) {
             log("Errore in LogoutServlet doPost", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }

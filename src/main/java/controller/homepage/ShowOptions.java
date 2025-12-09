@@ -11,6 +11,7 @@ import model.Variante;
 import model.VarianteDAO;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -29,7 +30,6 @@ public class ShowOptions extends HttpServlet {
             String idProdotto = req.getParameter("idProdotto");
             resp.setContentType("application/json");
 
-            // RIGA 30 FIX: Gestito dal try-catch globale
             PrintWriter o = resp.getWriter();
             JSONArray jsonArray = new JSONArray();
 
@@ -37,7 +37,6 @@ public class ShowOptions extends HttpServlet {
                 if (action.equals("showFirst")) {
                     try {
                         VarianteDAO varianteDAO = new VarianteDAO();
-                        // RIGA 37 FIX: Parsing protetto
                         Variante v = varianteDAO.doRetrieveVarianteByIdVariante(Integer.parseInt(idVariante));
 
                         if (v != null) {
@@ -123,7 +122,6 @@ public class ShowOptions extends HttpServlet {
             if (action != null && idProdotto != null && req.getParameter("flavour") != null && req.getParameter("weight") != null && action.equals("updatePrice")) {
                 try {
                     String flavour = req.getParameter("flavour");
-                    // RIGA 119 FIX: Parsing protetto
                     int weight = Integer.parseInt(req.getParameter("weight"));
                     ProdottoDAO prodottoDAO = new ProdottoDAO();
                     Prodotto x = prodottoDAO.doRetrieveById(idProdotto);
@@ -149,20 +147,19 @@ public class ShowOptions extends HttpServlet {
         } catch (Exception e) {
             log("Errore in ShowOptions doGet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        // RIGA 140 FIX: Gestione eccezioni doPost
         try {
             doGet(req, resp);
         } catch (ServletException | IOException e) {
             log("Errore in ShowOptions doPost", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }

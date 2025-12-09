@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import model.*;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -17,13 +18,12 @@ public class OrdineServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        // RIGA 20 FIX: Gestione eccezioni per super.doGet
         try {
             super.doGet(req, resp);
         } catch (ServletException | IOException e) {
             log("Errore in OrdineServlet doGet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }
@@ -82,13 +82,12 @@ public class OrdineServlet extends HttpServlet {
                 req.setAttribute("order", ordine1);
                 req.setAttribute("orderDetails", dettaglioOrdini1);
 
-                // RIGA 71 FIX: Avvolto nel try-catch generale
                 req.getRequestDispatcher("WEB-INF/Ordine.jsp").forward(req, resp);
             }
         } catch (Exception e) {
             log("Errore in OrdineServlet doPost", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore durante il salvataggio dell'ordine.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore durante il salvataggio dell'ordine.");
             }
         }
     }

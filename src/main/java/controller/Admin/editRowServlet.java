@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import model.*;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.text.ParseException;
@@ -33,13 +34,13 @@ public class editRowServlet extends HttpServlet {
             String primaryKey = req.getParameter("primaryKey");
 
             if (tableName == null || tableName.isBlank() || primaryKey == null || primaryKey.isBlank()) {
-                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parametri 'tableName' o 'primaryKey' mancanti.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_BAD_REQUEST, "Parametri 'tableName' o 'primaryKey' mancanti.");
                 return;
             }
 
             // Validazione whitelist
             if (tableName == null || !VALID_TABLE_NAMES.contains(tableName)) {
-                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
                 return;
             }
 
@@ -70,12 +71,12 @@ public class editRowServlet extends HttpServlet {
             if (success) {
                 req.getRequestDispatcher("showTable?tableName=" + tableName).forward(req, resp);
             } else {
-                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
             }
         } catch (Exception e) {
             log("Errore in editRowServlet doPost", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la modifica.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la modifica.");
             }
         }
     }
@@ -360,7 +361,7 @@ public class editRowServlet extends HttpServlet {
         } catch (Exception e) {
             log("Errore in editRowServlet doGet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }

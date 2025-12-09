@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import model.Utente;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 
@@ -23,10 +24,12 @@ public class AdminServlet extends HttpServlet {
                 req.getRequestDispatcher("WEB-INF/Admin/AreaAdmin.jsp").forward(req, resp);
             } catch (ServletException | IOException e) {
                 log("Errore nel forward AreaAdmin (doGet)", e);
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore durante il caricamento della pagina Admin.");
+                // FIX: Uso di ServletUtils per inviare l'errore in modo sicuro
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore durante il caricamento della pagina Admin.");
             }
         } else {
-            resp.sendError(HttpServletResponse.SC_FORBIDDEN, "Accesso Negato");
+            // FIX: Uso di ServletUtils anche qui per consistenza e sicurezza
+            ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_FORBIDDEN, "Accesso Negato");
         }
     }
 
@@ -36,7 +39,8 @@ public class AdminServlet extends HttpServlet {
             doGet(req, resp);
         } catch (ServletException | IOException e) {
             log("Errore nel doPost AdminServlet", e);
-            resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno nel processare la richiesta.");
+            // FIX: Uso di ServletUtils per gestire l'errore senza nested try-catch
+            ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno nel processare la richiesta.");
         }
     }
 }

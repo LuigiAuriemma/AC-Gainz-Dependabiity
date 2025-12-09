@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import model.Utente;
 import model.UtenteDAO;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.text.ParseException;
@@ -32,7 +33,7 @@ public class RegistrazioneServlet extends HttpServlet {
         } catch (ServletException | IOException e) {
             log("Errore in RegistrazioneServlet doGet", e);
             if (!response.isCommitted()) {
-                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }
@@ -115,7 +116,7 @@ public class RegistrazioneServlet extends HttpServlet {
         } catch (Exception e) {
             log("Errore in RegistrazioneServlet doPost", e);
             if (!response.isCommitted()) {
-                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore durante la registrazione.");
+                ServletUtils.sendErrorSafe(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore durante la registrazione.");
             }
         }
     }

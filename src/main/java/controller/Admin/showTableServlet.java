@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import model.*;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -27,7 +28,7 @@ public class showTableServlet extends HttpServlet {
         } catch (Exception e) {
             log("Errore in showTableServlet doGet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la visualizzazione della tabella.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la visualizzazione della tabella.");
             }
         }
     }
@@ -37,7 +38,7 @@ public class showTableServlet extends HttpServlet {
         //In base alla tabella scelta dall'admin e inoltrata tramite la request vengono mostrate le tuple della tabella
         switch (tableName) {
             case "utente" -> {
-                List<Utente> utenti = new ArrayList<>();
+                List<Utente> utenti;
                 UtenteDAO utenteDAO = new UtenteDAO();
 
                 utenti = utenteDAO.doRetrieveAll();
@@ -45,7 +46,7 @@ public class showTableServlet extends HttpServlet {
                 request.getRequestDispatcher("WEB-INF/Admin/tableUtente.jsp").forward(request, response);
             }
             case "prodotto" -> {
-                List<Prodotto> prodotti = new ArrayList<>();
+                List<Prodotto> prodotti;
                 ProdottoDAO prodottoDAO = new ProdottoDAO();
 
                 prodotti = prodottoDAO.doRetrieveAll();
@@ -53,7 +54,7 @@ public class showTableServlet extends HttpServlet {
                 request.getRequestDispatcher("WEB-INF/Admin/tableProdotto.jsp").forward(request, response);
             }
             case "variante" -> {
-                List<Variante> varianti = new ArrayList<>();
+                List<Variante> varianti;
                 VarianteDAO varianteDAO = new VarianteDAO();
 
                 varianti = varianteDAO.doRetrieveAll();
@@ -62,7 +63,7 @@ public class showTableServlet extends HttpServlet {
                 request.getRequestDispatcher("WEB-INF/Admin/tableVariante.jsp").forward(request, response);
             }
             case "ordine" -> {
-                List<Ordine> ordini = new ArrayList<>();
+                List<Ordine> ordini;
                 OrdineDao ordineDao = new OrdineDao();
 
                 ordini = ordineDao.doRetrieveAll();
@@ -71,7 +72,7 @@ public class showTableServlet extends HttpServlet {
                 request.getRequestDispatcher("WEB-INF/Admin/tableOrdine.jsp").forward(request, response);
             }
             case "dettaglioOrdine" -> {
-                List<DettaglioOrdine> dettaglioOrdini = new ArrayList<>();
+                List<DettaglioOrdine> dettaglioOrdini;
                 DettaglioOrdineDAO dettaglioOrdineDAO = new DettaglioOrdineDAO();
                 dettaglioOrdini = dettaglioOrdineDAO.doRetrieveAll();
 
@@ -95,7 +96,7 @@ public class showTableServlet extends HttpServlet {
                 request.getRequestDispatcher("WEB-INF/Admin/tableConfezione.jsp").forward(request, response);
             }
             default -> {
-                response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Tabella non valida");
+                ServletUtils.sendErrorSafe(response, HttpServletResponse.SC_BAD_REQUEST, "Tabella non valida");
             }
         }
     }
@@ -107,7 +108,7 @@ public class showTableServlet extends HttpServlet {
         } catch (ServletException | IOException e) {
             log("Errore in showTableServlet doPost", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }

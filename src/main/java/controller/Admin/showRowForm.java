@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import model.*;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -27,7 +28,6 @@ public class showRowForm extends HttpServlet {
             JSONArray jsonArray = new JSONArray();
             resp.setContentType("application/json");
 
-            log(tableName + " ShowRowForm");
 
             // Controlla se i parametri tableName e primaryKey sono validi
             if (tableName != null && !tableName.isBlank() && primaryKey != null && !primaryKey.isBlank()) {
@@ -41,7 +41,7 @@ public class showRowForm extends HttpServlet {
                     case "gusto" -> showGustoRowTable(primaryKey, jsonArray);
                     case "confezione" -> showConfezioneRowTable(primaryKey, jsonArray);
                     default -> {
-                        resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Tabella non valida.");
+                        ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_BAD_REQUEST, "Tabella non valida.");
                         return;
                     }
                 }
@@ -55,7 +55,7 @@ public class showRowForm extends HttpServlet {
         } catch (Exception e) {
             log("Errore in showRowForm doGet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante il recupero dei dati.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante il recupero dei dati.");
             }
         }
     }
@@ -254,7 +254,7 @@ public class showRowForm extends HttpServlet {
         } catch (ServletException | IOException e) {
             log("Errore in showRowForm doPost", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }

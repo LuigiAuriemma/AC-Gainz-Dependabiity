@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import model.*;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -17,13 +18,12 @@ import java.util.List;
 public class AreaPersonaleServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        // RIGA 20 FIX: Gestione eccezioni per super.doGet
         try {
             super.doGet(req, resp);
         } catch (ServletException | IOException e) {
             log("Errore in AreaPersonaleServlet doGet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }
@@ -57,13 +57,12 @@ public class AreaPersonaleServlet extends HttpServlet {
                 req.setAttribute("ordini", ordini);
                 req.setAttribute("dettaglioOrdini", dettaglioOrdini);
 
-                // RIGA 50 FIX: Avvolto nel try-catch generale per gestire eccezioni di forward
                 req.getRequestDispatcher("WEB-INF/AreaUtente.jsp").forward(req, resp);
             }
         } catch (Exception e) {
             log("Errore in AreaPersonaleServlet doPost", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore durante il recupero dell'area personale.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore durante il recupero dell'area personale.");
             }
         }
     }

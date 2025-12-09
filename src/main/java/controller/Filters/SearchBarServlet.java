@@ -10,6 +10,7 @@ import model.Prodotto;
 import model.ProdottoDAO;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -53,7 +54,9 @@ public class SearchBarServlet extends HttpServlet {
                         session.setAttribute("searchBarName", name);
                     } catch (SQLException e) {
                         log("Errore SQL ricerca per nome", e);
-                        if (!resp.isCommitted()) resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore database.");
+                        if (!resp.isCommitted()) {
+                            ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore database.");
+                        }
                         return;
                     }
                 }
@@ -65,7 +68,9 @@ public class SearchBarServlet extends HttpServlet {
                         products = prodottoDAO.filterProducts(categoria, "", "", "", "");
                     } catch (SQLException e) {
                         log("Errore SQL ricerca per categoria", e);
-                        if (!resp.isCommitted()) resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore database.");
+                        if (!resp.isCommitted()) {
+                            ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore database.");
+                        }
                         return;
                     }
                 }
@@ -77,7 +82,7 @@ public class SearchBarServlet extends HttpServlet {
         } catch (Exception e) {
             log("Errore in SearchBarServlet doGet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la ricerca.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la ricerca.");
             }
         }
     }
@@ -106,7 +111,7 @@ public class SearchBarServlet extends HttpServlet {
         } catch (ServletException | IOException e) {
             log("Errore in SearchBarServlet doPost", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }

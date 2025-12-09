@@ -9,6 +9,7 @@ import model.Prodotto;
 import model.Variante;
 import model.VarianteDAO;
 import org.json.simple.JSONArray;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -56,7 +57,6 @@ public class ShowTasteServlet extends HttpServlet {
             // Impostare il tipo di contenuto e inviare la risposta
             resp.setContentType("application/json");
 
-            // FIX RIGA 57: Gestione sicura dell'output stream
             try (PrintWriter out = resp.getWriter()) {
                 out.println(jsonArray);
                 out.flush();
@@ -64,20 +64,19 @@ public class ShowTasteServlet extends HttpServlet {
         } catch (Exception e) {
             log("Errore in ShowTasteServlet doGet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno nel recupero dei gusti.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno nel recupero dei gusti.");
             }
         }
     }
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        // FIX RIGA 64: Protezione chiamata doGet
         try {
             doGet(req, resp);
         } catch (ServletException | IOException e) {
             log("Errore in ShowTasteServlet doPost", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }

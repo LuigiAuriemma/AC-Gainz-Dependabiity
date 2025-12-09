@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.Part;
 import model.*;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,7 +40,7 @@ public class insertRowServlet extends HttpServlet {
         } catch (ServletException | IOException e) {
             log("Errore in doGet insertRowServlet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }
@@ -51,13 +52,13 @@ public class insertRowServlet extends HttpServlet {
             System.out.println(nameTable);
 
             if (nameTable == null || nameTable.isBlank()) {
-                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parametro 'nameTable' mancante.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_BAD_REQUEST, "Parametro 'nameTable' mancante.");
                 return; // Interrompe l'esecuzione del metodo
             }
 
             // Validazione whitelist
             if (nameTable == null || !VALID_TABLE_NAMES.contains(nameTable)) {
-                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
                 return;
             }
 
@@ -86,12 +87,12 @@ public class insertRowServlet extends HttpServlet {
             if (success) {
                 req.getRequestDispatcher("showTable?tableName=" + nameTable).forward(req, resp);
             } else {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
             }
         } catch (Exception e) {
             log("Errore in doPost insertRowServlet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante l'inserimento.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante l'inserimento.");
             }
         }
     }

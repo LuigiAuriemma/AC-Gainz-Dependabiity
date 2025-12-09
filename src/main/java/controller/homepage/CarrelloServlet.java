@@ -9,8 +9,8 @@ import jakarta.servlet.http.HttpSession;
 import model.*;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
-// IMPORTANTE: Importa la libreria di sicurezza
 import org.owasp.encoder.Encode;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -31,7 +31,6 @@ public class CarrelloServlet extends HttpServlet {
             ProdottoDAO prodottoDAO = new ProdottoDAO();
             HttpSession session = req.getSession();
 
-            // RIGA 34 FIX: Gestito all'interno del try-catch globale
             synchronized (session) {
                 PrintWriter out = resp.getWriter();
 
@@ -41,7 +40,6 @@ public class CarrelloServlet extends HttpServlet {
                     return;
                 }
 
-                // RIGHE 43-46 FIX: Le eccezioni lanciate dai metodi handle sono ora catturate
                 switch (action) {
                     case "show" -> handleShowAction(session, prodottoDAO, out);
                     case "addVariant" -> handleAddVariantAction(req, session, prodottoDAO, out);
@@ -56,7 +54,7 @@ public class CarrelloServlet extends HttpServlet {
         } catch (Exception e) {
             log("Errore in CarrelloServlet doGet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la gestione del carrello.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la gestione del carrello.");
             }
         }
     }
@@ -75,7 +73,6 @@ public class CarrelloServlet extends HttpServlet {
     }
 
     public void handleQuantityVariantAction(HttpServletRequest request,  HttpSession session, ProdottoDAO prodottoDAO, PrintWriter out) throws IOException {
-        // SECURITY: Encode.forHtml pulisce l'input per SonarCloud
         String idProdotto = Encode.forHtml(request.getParameter("id"));
         String gusto = Encode.forHtml(request.getParameter("gusto"));
 
@@ -142,7 +139,6 @@ public class CarrelloServlet extends HttpServlet {
     }
 
     public void handleRemoveVariantAction(HttpServletRequest request, HttpSession session, ProdottoDAO prodottoDAO, PrintWriter out) throws IOException {
-        // SECURITY: Encode.forHtml pulisce l'input per SonarCloud
         String idToRemove = Encode.forHtml(request.getParameter("id"));
         String gusto = Encode.forHtml(request.getParameter("gusto"));
 
@@ -179,7 +175,6 @@ public class CarrelloServlet extends HttpServlet {
     }
 
     private void handleAddVariantAction(HttpServletRequest request, HttpSession session, ProdottoDAO prodottoDAO, PrintWriter out) throws IOException {
-        // SECURITY: Encode.forHtml pulisce l'input per SonarCloud
         String id = Encode.forHtml(request.getParameter("id"));
 
         Prodotto p = prodottoDAO.doRetrieveById(id);
@@ -195,7 +190,6 @@ public class CarrelloServlet extends HttpServlet {
                 }
             }
 
-            // SECURITY: Encode.forHtml pulisce l'input per SonarCloud
             String gusto = Encode.forHtml(request.getParameter("gusto"));
             String pesoConfezioneStr = request.getParameter("pesoConfezione");
 
@@ -243,12 +237,12 @@ public class CarrelloServlet extends HttpServlet {
 
                 if (!itemExists && quantity <= v.getQuantita()) {
                     Carrello c = new Carrello();
-                    c.setIdProdotto(id); // Ora id è pulito
+                    c.setIdProdotto(id);
                     c.setIdVariante(v.getIdVariante());
                     c.setNomeProdotto(p.getNome());
                     c.setQuantita(quantity);
                     c.setPrezzo(price * quantity);
-                    c.setGusto(gusto); // Ora gusto è pulito
+                    c.setGusto(gusto);
                     c.setPesoConfezione(pesoConfezione);
                     c.setImmagineProdotto(p.getImmagine());
                     cartItems.add(c);
@@ -273,8 +267,6 @@ public class CarrelloServlet extends HttpServlet {
 
             JSONObject jsonObject = new JSONObject();
 
-            // I valori dentro 'item' (idProdotto e Gusto) sono stati puliti prima di essere
-            // aggiunti alla lista nelle funzioni handleAdd/handleQuantity.
             jsonObject.put("idProdotto", item.getIdProdotto());
             jsonObject.put("idVariante", item.getIdVariante());
             jsonObject.put("nomeProdotto", p.getNome());
@@ -305,13 +297,12 @@ public class CarrelloServlet extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        // RIGA 299 FIX: Avvolto in try-catch per gestire le eccezioni del doGet
         try {
             doGet(req, resp);
         } catch (ServletException | IOException e) {
             log("Errore in CarrelloServlet doPost", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }

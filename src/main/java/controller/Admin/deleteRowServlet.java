@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import model.*;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -27,7 +28,7 @@ public class deleteRowServlet extends HttpServlet {
             Utente utente = (Utente) req.getSession().getAttribute("Utente");
 
             if (tableName == null || tableName.isBlank()) {
-                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parametro tableName mancante.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_BAD_REQUEST, "Parametro tableName mancante.");
                 return; // Interrompe l'esecuzione
             }
 
@@ -62,13 +63,13 @@ public class deleteRowServlet extends HttpServlet {
                 if (jsonArray != null) {
                     sendJsonResponse(jsonArray, resp);
                 } else {
-                    resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name or primary key.");
+                    ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_BAD_REQUEST, "Invalid table name or primary key.");
                 }
             }
         } catch (Exception e) {
             log("Errore in doGet deleteRowServlet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante l'operazione.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante l'operazione.");
             }
         }
     }
@@ -300,7 +301,7 @@ public class deleteRowServlet extends HttpServlet {
         } catch (ServletException | IOException e) {
             log("Errore in doPost deleteRowServlet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante l'operazione.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante l'operazione.");
             }
         }
     }

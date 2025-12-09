@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import model.Prodotto;
 import model.ProdottoDAO;
+import controller.Security.ServletUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -65,7 +66,7 @@ public class CategoriesServlet extends HttpServlet {
         } catch (ServletException | IOException e) {
             log("Errore in CategoriesServlet doGet", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante il recupero delle categorie.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante il recupero delle categorie.");
             }
         }
     }
@@ -77,7 +78,7 @@ public class CategoriesServlet extends HttpServlet {
         } catch (ServletException | IOException e) {
             log("Errore in CategoriesServlet doPost", e);
             if (!resp.isCommitted()) {
-                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
             }
         }
     }
