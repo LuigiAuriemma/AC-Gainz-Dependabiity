@@ -62,19 +62,19 @@ public class CategoriesServletTest {
     // --- Test 2: FAGLIA (NullPointerException) ---
 
     @Test
-    @DisplayName("doGet con 'category' null viene gestito (chiama criteria con null)")
+    @DisplayName("doGet con 'category' null viene gestito (default a 'tutto' e chiama doRetrieveAll)")
     void doGet_nullCategory_isHandledSafely() throws ServletException, IOException {
-        // Simula il parametro mancante
+        // Simula il parametro mancante (null)
         when(request.getParameter("category")).thenReturn(null);
 
         List<Prodotto> emptyList = new ArrayList<>(); // Lista fittizia
 
         try (MockedConstruction<ProdottoDAO> mockedDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-            // Stub: ci aspettiamo che il DAO venga chiamato con 'null'
-            when(mock.doRetrieveByCriteria("categoria", null)).thenReturn(emptyList);
+            // Stub: Ora ci aspettiamo che il DAO chiami doRetrieveAll perché il default è "tutto"
+            when(mock.doRetrieveAll()).thenReturn(emptyList);
         })) {
 
-            // 1. Verifichiamo che NON ci sia nessun crash
+            // 1. Eseguiamo la servlet
             assertDoesNotThrow(() -> {
                 servlet.doGet(request, response);
             });
@@ -82,12 +82,16 @@ public class CategoriesServletTest {
             // 2. Verifichiamo il nuovo percorso
             ProdottoDAO dao = mockedDao.constructed().get(0);
 
-            // Verifica che sia stato chiamato il metodo GIUSTO (il ramo 'else')
-            verify(dao).doRetrieveByCriteria("categoria", null);
-            verify(dao, never()).doRetrieveAll();
+            // CORREZIONE: Verifica che sia stato chiamato doRetrieveAll()
+            verify(dao).doRetrieveAll();
 
-            // Verifica che gli attributi siano stati impostati (anche se con null)
-            verify(session).setAttribute("categoria", null);
+            // CORREZIONE: Verifica che NON sia stato chiamato il metodo con i criteri
+            verify(dao, never()).doRetrieveByCriteria(anyString(), any());
+
+            // CORREZIONE: Verifica che in sessione finisca il valore di default "tutto", NON null
+            verify(session).setAttribute("categoria", "tutto");
+            verify(session).setAttribute("categoriaRecovery", "tutto");
+
             verify(request).setAttribute("originalProducts", emptyList);
 
             // Verifica il forward

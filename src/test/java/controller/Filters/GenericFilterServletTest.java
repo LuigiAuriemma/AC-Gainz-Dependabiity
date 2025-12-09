@@ -307,7 +307,7 @@ public class GenericFilterServletTest {
         }
 
         @Test
-        @DisplayName("Filtro AJAX usa parametri sessione e request")
+        @DisplayName("Filtro AJAX usa parametri sessione e request (con valori in Whitelist)")
         void ajaxFilter_usesSessionAndRequestParameters() throws ServletException, IOException, SQLException {
             when(request.getParameter("nameForm")).thenReturn(null);
 
@@ -318,7 +318,9 @@ public class GenericFilterServletTest {
             // Request parameters
             when(request.getParameter("weight")).thenReturn("1kg");
             when(request.getParameter("taste")).thenReturn("Cioccolato");
-            when(request.getParameter("sorting")).thenReturn("price_asc");
+
+            // CORREZIONE: Uso "PriceAsc" (come nella tua lista) invece di "price_asc"
+            when(request.getParameter("sorting")).thenReturn("PriceAsc");
 
             List<Prodotto> emptyList = new ArrayList<>();
 
@@ -330,8 +332,13 @@ public class GenericFilterServletTest {
                 servlet.doGet(request, response);
 
                 // Verifica che i parametri siano passati correttamente al DAO
-                verify(dao.constructed().get(0)).filterProducts("Integratori", "price_asc", "1kg", "Cioccolato",
-                        "Whey");
+                verify(dao.constructed().get(0)).filterProducts(
+                        eq("Integratori"),
+                        eq("PriceAsc"), // <-- Deve corrispondere esattamente a quello sopra
+                        eq("1kg"),
+                        eq("Cioccolato"),
+                        eq("Whey")
+                );
 
                 // Verifica aggiornamento sessione
                 verify(session).setAttribute("filteredProducts", emptyList);
