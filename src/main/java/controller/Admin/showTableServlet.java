@@ -15,14 +15,21 @@ import java.util.List;
 public class showTableServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String tableName = req.getParameter("tableName");
+        try {
+            String tableName = req.getParameter("tableName");
 
-        if (tableName == null || tableName.isEmpty()) {
-            // Opzione A: Reindirizza alla home dell'admin
-            resp.sendRedirect("admin");
-            return;
+            if (tableName == null || tableName.isEmpty()) {
+                // Opzione A: Reindirizza alla home dell'admin
+                resp.sendRedirect("admin");
+                return;
+            }
+            showTable(tableName, req, resp);
+        } catch (Exception e) {
+            log("Errore in showTableServlet doGet", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la visualizzazione della tabella.");
+            }
         }
-        showTable(tableName, req, resp);
     }
 
     private void showTable(String tableName, HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -37,7 +44,7 @@ public class showTableServlet extends HttpServlet {
                 request.setAttribute("tableUtente", utenti);
                 request.getRequestDispatcher("WEB-INF/Admin/tableUtente.jsp").forward(request, response);
             }
-            case "prodotto" ->{
+            case "prodotto" -> {
                 List<Prodotto> prodotti = new ArrayList<>();
                 ProdottoDAO prodottoDAO = new ProdottoDAO();
 
@@ -45,7 +52,7 @@ public class showTableServlet extends HttpServlet {
                 request.setAttribute("tableProdotto", prodotti);
                 request.getRequestDispatcher("WEB-INF/Admin/tableProdotto.jsp").forward(request, response);
             }
-            case "variante" ->{
+            case "variante" -> {
                 List<Variante> varianti = new ArrayList<>();
                 VarianteDAO varianteDAO = new VarianteDAO();
 
@@ -54,7 +61,7 @@ public class showTableServlet extends HttpServlet {
 
                 request.getRequestDispatcher("WEB-INF/Admin/tableVariante.jsp").forward(request, response);
             }
-            case "ordine" ->{
+            case "ordine" -> {
                 List<Ordine> ordini = new ArrayList<>();
                 OrdineDao ordineDao = new OrdineDao();
 
@@ -62,7 +69,8 @@ public class showTableServlet extends HttpServlet {
                 request.setAttribute("tableOrdine", ordini);
 
                 request.getRequestDispatcher("WEB-INF/Admin/tableOrdine.jsp").forward(request, response);
-            }case "dettaglioOrdine" ->{
+            }
+            case "dettaglioOrdine" -> {
                 List<DettaglioOrdine> dettaglioOrdini = new ArrayList<>();
                 DettaglioOrdineDAO dettaglioOrdineDAO = new DettaglioOrdineDAO();
                 dettaglioOrdini = dettaglioOrdineDAO.doRetrieveAll();
@@ -70,27 +78,37 @@ public class showTableServlet extends HttpServlet {
                 request.setAttribute("tableDettaglioOrdini", dettaglioOrdini);
 
                 request.getRequestDispatcher("WEB-INF/Admin/tableDettaglioOrdini.jsp").forward(request, response);
-            }case "gusto" ->{
+            }
+            case "gusto" -> {
                 GustoDAO gustoDAO = new GustoDAO();
                 List<Gusto> gusti = gustoDAO.doRetrieveAll();
 
                 request.setAttribute("tableGusto", gusti);
 
                 request.getRequestDispatcher("WEB-INF/Admin/tableGusto.jsp").forward(request, response);
-            }case "confezione" ->{
+            }
+            case "confezione" -> {
                 ConfezioneDAO confezioneDAO = new ConfezioneDAO();
                 List<Confezione> confezioni = confezioneDAO.doRetrieveAll();
 
                 request.setAttribute("tableConfezione", confezioni);
                 request.getRequestDispatcher("WEB-INF/Admin/tableConfezione.jsp").forward(request, response);
             }
+            default -> {
+                response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Tabella non valida");
+            }
         }
-
-
     }
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        doGet(req, resp);
+        try {
+            doGet(req, resp);
+        } catch (ServletException | IOException e) {
+            log("Errore in showTableServlet doPost", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+            }
+        }
     }
 }

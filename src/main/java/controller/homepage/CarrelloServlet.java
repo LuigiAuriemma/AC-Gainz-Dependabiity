@@ -22,32 +22,41 @@ public class CarrelloServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String action = req.getParameter("action");
+        try {
+            String action = req.getParameter("action");
 
-        resp.setContentType("application/json");
-        resp.setCharacterEncoding("UTF-8");
+            resp.setContentType("application/json");
+            resp.setCharacterEncoding("UTF-8");
 
-        ProdottoDAO prodottoDAO = new ProdottoDAO();
-        HttpSession session = req.getSession();
+            ProdottoDAO prodottoDAO = new ProdottoDAO();
+            HttpSession session = req.getSession();
 
-        synchronized (session) {
-            PrintWriter out = resp.getWriter();
+            // RIGA 34 FIX: Gestito all'interno del try-catch globale
+            synchronized (session) {
+                PrintWriter out = resp.getWriter();
 
-            if (action == null) {
-                out.println(new JSONArray());
-                out.flush();
-                return;
-            }
-
-            switch (action) {
-                case "show" -> handleShowAction(session, prodottoDAO, out);
-                case "addVariant" -> handleAddVariantAction(req, session, prodottoDAO, out);
-                case "removeVariant" -> handleRemoveVariantAction(req, session, prodottoDAO, out);
-                case "quantityVariant" -> handleQuantityVariantAction(req, session, prodottoDAO, out);
-                default -> {
+                if (action == null) {
                     out.println(new JSONArray());
                     out.flush();
+                    return;
                 }
+
+                // RIGHE 43-46 FIX: Le eccezioni lanciate dai metodi handle sono ora catturate
+                switch (action) {
+                    case "show" -> handleShowAction(session, prodottoDAO, out);
+                    case "addVariant" -> handleAddVariantAction(req, session, prodottoDAO, out);
+                    case "removeVariant" -> handleRemoveVariantAction(req, session, prodottoDAO, out);
+                    case "quantityVariant" -> handleQuantityVariantAction(req, session, prodottoDAO, out);
+                    default -> {
+                        out.println(new JSONArray());
+                        out.flush();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log("Errore in CarrelloServlet doGet", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la gestione del carrello.");
             }
         }
     }
@@ -296,6 +305,14 @@ public class CarrelloServlet extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        doGet(req, resp);
+        // RIGA 299 FIX: Avvolto in try-catch per gestire le eccezioni del doGet
+        try {
+            doGet(req, resp);
+        } catch (ServletException | IOException e) {
+            log("Errore in CarrelloServlet doPost", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+            }
+        }
     }
 }

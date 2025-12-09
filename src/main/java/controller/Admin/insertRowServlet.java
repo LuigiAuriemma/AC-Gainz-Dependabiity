@@ -34,51 +34,65 @@ public class insertRowServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        super.doGet(req, resp);
+        try {
+            super.doGet(req, resp);
+        } catch (ServletException | IOException e) {
+            log("Errore in doGet insertRowServlet", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+            }
+        }
     }
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String nameTable = req.getParameter("nameTable");
-        System.out.println(nameTable);
+        try {
+            String nameTable = req.getParameter("nameTable");
+            System.out.println(nameTable);
 
-        if (nameTable == null || nameTable.isBlank()) {
-            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parametro 'nameTable' mancante.");
-            return; // Interrompe l'esecuzione del metodo
-        }
+            if (nameTable == null || nameTable.isBlank()) {
+                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parametro 'nameTable' mancante.");
+                return; // Interrompe l'esecuzione del metodo
+            }
 
-        // Validazione whitelist
-        if (nameTable == null || !VALID_TABLE_NAMES.contains(nameTable)) {
-            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
-            return;
-        }
+            // Validazione whitelist
+            if (nameTable == null || !VALID_TABLE_NAMES.contains(nameTable)) {
+                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
+                return;
+            }
 
-        boolean success = false;
+            boolean success = false;
 
-        // in base a quale tabella viene scelta viene chiamato un metodo
-        // se il nome della tabella è errato manda un errore
-        switch (nameTable) {
-            case "utente" ->
-                success = insertUtente(req);
-            case "prodotto" ->
-                success = insertProdotto(req);
-            case "variante" ->
-                success = insertVariante(req);
-            case "ordine" ->
-                success = insertOrdine(req);
-            case "dettagliOrdine" ->
-                success = insertDettaglioOrdine(req);
-            case "gusto" ->
-                success = insertGusto(req);
-            case "confezione" ->
-                success = insertConfezione(req);
-        }
+            // in base a quale tabella viene scelta viene chiamato un metodo
+            // se il nome della tabella è errato manda un errore
+            switch (nameTable) {
+                case "utente" ->
+                        success = insertUtente(req);
+                case "prodotto" ->
+                        success = insertProdotto(req);
+                case "variante" ->
+                        success = insertVariante(req);
+                case "ordine" ->
+                        success = insertOrdine(req);
+                case "dettagliOrdine" ->
+                        success = insertDettaglioOrdine(req);
+                case "gusto" ->
+                        success = insertGusto(req);
+                case "confezione" ->
+                        success = insertConfezione(req);
+            }
 
-        // se ha funzionato tutto correttamente mostra la tabella
-        if (success) {
-            req.getRequestDispatcher("showTable?tableName=" + nameTable).forward(req, resp);
-        } else {
-            resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+            // se ha funzionato tutto correttamente mostra la tabella
+            if (success) {
+                req.getRequestDispatcher("showTable?tableName=" + nameTable).forward(req, resp);
+            } else {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+            }
+        } catch (Exception e) {
+            log("Errore in doPost insertRowServlet", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante l'inserimento.");
+            }
         }
     }
 

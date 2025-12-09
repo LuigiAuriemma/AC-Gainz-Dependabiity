@@ -27,85 +27,98 @@ public class RegistrazioneServlet extends HttpServlet {
     private static final SimpleDateFormat DATE_FORMATTER = new SimpleDateFormat("yyyy-MM-dd");
 
     public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
-        this.doPost(request, response); // Delegate GET requests to doPost
+        try {
+            this.doPost(request, response);
+        } catch (ServletException | IOException e) {
+            log("Errore in RegistrazioneServlet doGet", e);
+            if (!response.isCommitted()) {
+                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+            }
+        }
     }
 
     public void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
-        //prendiamo i dati dal form
-        String email = request.getParameter("email");
-        String password = request.getParameter("password");
-        String nome = request.getParameter("nome");
-        String cognome = request.getParameter("cognome");
-        String codiceFiscale = request.getParameter("codiceFiscale");
-        String dateString = request.getParameter("dataDiNascita");
-        String indirizzo = request.getParameter("indirizzo");
-        String numCellulare = request.getParameter("numCellulare");
+        try {
+            //prendiamo i dati dal form
+            String email = request.getParameter("email");
+            String password = request.getParameter("password");
+            String nome = request.getParameter("nome");
+            String cognome = request.getParameter("cognome");
+            String codiceFiscale = request.getParameter("codiceFiscale");
+            String dateString = request.getParameter("dataDiNascita");
+            String indirizzo = request.getParameter("indirizzo");
+            String numCellulare = request.getParameter("numCellulare");
 
-        // Validifichiamo l'email
-        if (!isValidEmail(email)) {
-            request.setAttribute("error", "Pattern email non rispettato");
-            request.getRequestDispatcher("Registrazione.jsp").forward(request, response);
-            return;
+            // Validifichiamo l'email
+            if (!isValidEmail(email)) {
+                request.setAttribute("error", "Pattern email non rispettato");
+                request.getRequestDispatcher("Registrazione.jsp").forward(request, response);
+                return;
+            }
+
+            // Controlliamo se l'email non sia gia presente
+            UtenteDAO utenteDAO = new UtenteDAO();
+            if (utenteDAO.doRetrieveByEmail(email) != null) {
+                request.setAttribute("error", "Email già registrata.");
+                request.getRequestDispatcher("Registrazione.jsp").forward(request, response);
+                return;
+            }
+
+            // Validifichiamo la password
+            if (!isValidPassword(password)) {
+                request.setAttribute("error", "Pattern password non rispettato");
+                request.getRequestDispatcher("Registrazione.jsp").forward(request, response);
+                return;
+            }
+
+            // Validifichiamo il codice fiscale
+            if (!isValidCodiceFiscale(codiceFiscale)) {
+                request.setAttribute("error", "Pattern codice fiscale non rispettato");
+                request.getRequestDispatcher("Registrazione.jsp").forward(request, response);
+                return;
+            }
+
+            // Parse della data di nascita
+            Date dataDiNascita = parseDate(dateString);
+            if (dataDiNascita == null) {
+                request.setAttribute("error", "Pattern data non rispettato");
+                request.getRequestDispatcher("Registrazione.jsp").forward(request, response);
+                return;
+            }
+
+            // Validifichiamo il numero di telefono
+            if (!isValidPhone(numCellulare)) {
+                request.setAttribute("error", "Pattern numero di telefono non rispettato");
+                request.getRequestDispatcher("Registrazione.jsp").forward(request, response);
+                return;
+            }
+
+            // Dopo aver passato tutte le validificazioni creiamo l'oggetto utente da salvare nel DB
+            Utente utente = new Utente();
+            utente.setEmail(email);
+            utente.setPassword(password);
+            utente.hashPassword();
+            utente.setCodiceFiscale(codiceFiscale);
+            utente.setNome(nome);
+            utente.setCognome(cognome);
+            utente.setIndirizzo(indirizzo);
+            utente.setTelefono(numCellulare);
+            utente.setDataNascita(dataDiNascita);
+
+            utenteDAO.doSave(utente);
+
+            // Store user in session and forward to index.jsp
+            HttpSession session = request.getSession();
+            session.setAttribute("Utente", utente);
+            response.sendRedirect("index.jsp");
+
+        } catch (Exception e) {
+            log("Errore in RegistrazioneServlet doPost", e);
+            if (!response.isCommitted()) {
+                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore durante la registrazione.");
+            }
         }
-
-        // Controlliamo se l'email non sia gia presente
-        UtenteDAO utenteDAO = new UtenteDAO();
-        if (utenteDAO.doRetrieveByEmail(email) != null) {
-            request.setAttribute("error", "Email già registrata.");
-            request.getRequestDispatcher("Registrazione.jsp").forward(request, response);
-            return;
-        }
-
-        // Validifichiamo la password
-        if (!isValidPassword(password)) {
-            request.setAttribute("error", "Pattern password non rispettato");
-            request.getRequestDispatcher("Registrazione.jsp").forward(request, response);
-            return;
-        }
-
-        // Validifichiamo il codice fiscale
-        if (!isValidCodiceFiscale(codiceFiscale)) {
-            request.setAttribute("error", "Pattern codice fiscale non rispettato");
-            request.getRequestDispatcher("Registrazione.jsp").forward(request, response);
-            return;
-        }
-
-        // Parse della data di nascita
-        Date dataDiNascita = parseDate(dateString);
-        if (dataDiNascita == null) {
-            request.setAttribute("error", "Pattern data non rispettato");
-            request.getRequestDispatcher("Registrazione.jsp").forward(request, response);
-            return;
-        }
-
-        // Validifichiamo il numero di telefono
-        if (!isValidPhone(numCellulare)) {
-            request.setAttribute("error", "Pattern numero di telefono non rispettato");
-            request.getRequestDispatcher("Registrazione.jsp").forward(request, response);
-            return;
-        }
-
-        // Dopo aver passato tutte le validificazioni creiamo l'oggetto utente da salvare nel DB
-        Utente utente = new Utente();
-        utente.setEmail(email);
-        utente.setPassword(password);
-        utente.hashPassword();
-        utente.setCodiceFiscale(codiceFiscale);
-        utente.setNome(nome);
-        utente.setCognome(cognome);
-        utente.setIndirizzo(indirizzo);
-        utente.setTelefono(numCellulare);
-        utente.setDataNascita(dataDiNascita);
-
-        utenteDAO.doSave(utente);
-
-        // Store user in session and forward to index.jsp
-        HttpSession session = request.getSession();
-        session.setAttribute("Utente", utente);
-        response.sendRedirect("index.jsp");
     }
-
-
 
     // Metodo per validificare l'email
     private boolean isValidEmail(String email) {

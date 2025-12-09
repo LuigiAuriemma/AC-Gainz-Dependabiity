@@ -18,34 +18,45 @@ public class showRowForm extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        // Recupera il nome della tabella e la chiave primaria dai parametri della richiesta
-        String tableName = req.getParameter("tableName");
-        String primaryKey = req.getParameter("primaryKey");
+        try {
+            // Recupera il nome della tabella e la chiave primaria dai parametri della richiesta
+            String tableName = req.getParameter("tableName");
+            String primaryKey = req.getParameter("primaryKey");
 
-        // Crea un JSONArray per raccogliere le righe della tabella in formato JSON
-        JSONArray jsonArray = new JSONArray();
-        resp.setContentType("application/json");
+            // Crea un JSONArray per raccogliere le righe della tabella in formato JSON
+            JSONArray jsonArray = new JSONArray();
+            resp.setContentType("application/json");
 
-        System.out.println(tableName + " ShowRowForm");
-        // Controlla se i parametri tableName e primaryKey sono validi
-        if (tableName != null && !tableName.isBlank() && primaryKey != null && !primaryKey.isBlank()) {
-            // Determina quale tabella mostrare
-            switch (tableName) {
-                case "utente" -> showUtenteRowTable(primaryKey, jsonArray);
-                case "prodotto" -> showProdottoRowTable(primaryKey, jsonArray);
-                case "variante" -> showVarianteRowTable(primaryKey, jsonArray);
-                case "ordine" -> showOrdineRowTable(primaryKey, jsonArray);
-                case "dettaglioOrdine" -> showDettaglioOrdineRowTable(primaryKey, jsonArray);
-                case "gusto" -> showGustoRowTable(primaryKey, jsonArray);
-                case "confezione" -> showConfezioneRowTable(primaryKey, jsonArray);
-                default -> throw new ServletException("Tabella non valida.");
+            log(tableName + " ShowRowForm");
+
+            // Controlla se i parametri tableName e primaryKey sono validi
+            if (tableName != null && !tableName.isBlank() && primaryKey != null && !primaryKey.isBlank()) {
+                // Determina quale tabella mostrare
+                switch (tableName) {
+                    case "utente" -> showUtenteRowTable(primaryKey, jsonArray);
+                    case "prodotto" -> showProdottoRowTable(primaryKey, jsonArray);
+                    case "variante" -> showVarianteRowTable(primaryKey, jsonArray);
+                    case "ordine" -> showOrdineRowTable(primaryKey, jsonArray);
+                    case "dettaglioOrdine" -> showDettaglioOrdineRowTable(primaryKey, jsonArray);
+                    case "gusto" -> showGustoRowTable(primaryKey, jsonArray);
+                    case "confezione" -> showConfezioneRowTable(primaryKey, jsonArray);
+                    default -> {
+                        resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Tabella non valida.");
+                        return;
+                    }
+                }
             }
-        }
 
-        // Invia il JSON di risposta
-        try (PrintWriter out = resp.getWriter()) {
-            out.println(jsonArray.toJSONString());
-            out.flush();
+            // Invia il JSON di risposta
+            try (PrintWriter out = resp.getWriter()) {
+                out.println(jsonArray.toJSONString());
+                out.flush();
+            }
+        } catch (Exception e) {
+            log("Errore in showRowForm doGet", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante il recupero dei dati.");
+            }
         }
     }
 
@@ -60,10 +71,8 @@ public class showRowForm extends HttpServlet {
                 jsonArray.add(confezioneHelper(confezione));
             }
         } catch (NumberFormatException e) {
-            // Se la primaryKey non è un numero (es. "abc"),
-            // cattura l'errore e non fare nulla.
-            // Il JSON array rimarrà vuoto (comportamento sicuro).
-            e.printStackTrace();
+            // Se la primaryKey non è un numero (es. "abc"), cattura l'errore.
+            log("Errore parsing primaryKey Confezione", e);
         }
     }
 
@@ -77,9 +86,8 @@ public class showRowForm extends HttpServlet {
                 jsonArray.add(gustoHelper(gusto));
             }
         } catch (NumberFormatException e) {
-            // Se la primaryKey non è un numero (es. "abc"),
-            // cattura l'errore e non fare nulla.
-            e.printStackTrace();
+            // Se la primaryKey non è un numero (es. "abc"), cattura l'errore.
+            log("Errore parsing primaryKey Gusto", e);
         }
     }
 
@@ -97,9 +105,8 @@ public class showRowForm extends HttpServlet {
                     jsonArray.add(dettaglioOrdineHelper(dettaglioOrdine));
                 }
             } catch (NumberFormatException e) {
-                // Se le chiavi non sono numeri (es. "a, b, c"),
-                // cattura l'errore e non fare nulla.
-                e.printStackTrace();
+                // Se le chiavi non sono numeri (es. "a, b, c"), cattura l'errore.
+                log("Errore parsing primaryKey DettaglioOrdine", e);
             }
         }
     }
@@ -112,12 +119,12 @@ public class showRowForm extends HttpServlet {
             OrdineDao ordineDao = new OrdineDao();
             Ordine ordine = ordineDao.doRetrieveById(Integer.parseInt(primaryKey));
             if (ordine != null) {
-                System.out.println(ordine.getIdOrdine() + " OOOOKKK");
+                log(ordine.getIdOrdine() + " OOOOKKK");
                 jsonArray.add(jsonOrdineHelper(ordine));
             }
         } catch (NumberFormatException e) {
             // Se la primaryKey non è un numero, cattura l'errore.
-            e.printStackTrace();
+            log("Errore parsing primaryKey Ordine", e);
         }
     }
 
@@ -132,7 +139,7 @@ public class showRowForm extends HttpServlet {
             }
         } catch (NumberFormatException e) {
             // Se la primaryKey non è un numero, cattura l'errore.
-            e.printStackTrace();
+            log("Errore parsing primaryKey Variante", e);
         }
     }
 
@@ -242,6 +249,13 @@ public class showRowForm extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        doGet(req, resp);
+        try {
+            doGet(req, resp);
+        } catch (ServletException | IOException e) {
+            log("Errore in showRowForm doPost", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+            }
+        }
     }
 }

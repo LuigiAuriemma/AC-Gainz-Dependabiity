@@ -17,52 +17,58 @@ import java.util.List;
 import static controller.Admin.showRowForm.*;
 
 @WebServlet(value = "/deleteRow")
-
 public class deleteRowServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        // prendiamo i dati dalla request
-        String tableName = req.getParameter("tableName");
-        String primaryKey = req.getParameter("primaryKey");
-        Utente utente = (Utente) req.getSession().getAttribute("Utente");
+        try {
+            // prendiamo i dati dalla request
+            String tableName = req.getParameter("tableName");
+            String primaryKey = req.getParameter("primaryKey");
+            Utente utente = (Utente) req.getSession().getAttribute("Utente");
 
-        if (tableName == null || tableName.isBlank()) {
-            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parametro tableName mancante.");
-            return; // Interrompe l'esecuzione
-        }
-
-        // usato per controllare se admin cancella il suo stesso profilo
-        boolean isTheSame = false;
-
-        JSONArray jsonArray = null;
-        boolean success = switch (tableName) {
-            case "utente" -> handleRemoveRowFromUtente(primaryKey);
-            case "prodotto" -> handleRemoveRowFromProdotto(primaryKey);
-            case "variante" -> handleRemoveRowFromVariante(primaryKey);
-            case "ordine" -> handleRemoveRowFromOrdine(primaryKey);
-            case "dettaglioOrdine" -> handleRemoveRowFromDettaglioOrdine(primaryKey);
-            case "gusto" -> handleRemoveRowFromGusto(primaryKey);
-            case "confezione" -> handleRemoveRowFromConfezione(primaryKey);
-            default -> false;
-        };
-
-        if (success && tableName.equals("utente")) {
-            isTheSame = checkIfAdminDeletingSelf(primaryKey, utente);
-        }
-
-        if (isTheSame) {
-            req.getSession(false).invalidate();
-            resp.sendRedirect("index.jsp");
-            return; // Interrompe l'esecuzione
-        } else {
-            if (success) {
-                jsonArray = getJsonArrayForTable(tableName);
+            if (tableName == null || tableName.isBlank()) {
+                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parametro tableName mancante.");
+                return; // Interrompe l'esecuzione
             }
 
-            if (jsonArray != null) {
-                sendJsonResponse(jsonArray, resp);
+            // usato per controllare se admin cancella il suo stesso profilo
+            boolean isTheSame = false;
+
+            JSONArray jsonArray = null;
+            boolean success = switch (tableName) {
+                case "utente" -> handleRemoveRowFromUtente(primaryKey);
+                case "prodotto" -> handleRemoveRowFromProdotto(primaryKey);
+                case "variante" -> handleRemoveRowFromVariante(primaryKey);
+                case "ordine" -> handleRemoveRowFromOrdine(primaryKey);
+                case "dettaglioOrdine" -> handleRemoveRowFromDettaglioOrdine(primaryKey);
+                case "gusto" -> handleRemoveRowFromGusto(primaryKey);
+                case "confezione" -> handleRemoveRowFromConfezione(primaryKey);
+                default -> false;
+            };
+
+            if (success && tableName.equals("utente")) {
+                isTheSame = checkIfAdminDeletingSelf(primaryKey, utente);
+            }
+
+            if (isTheSame) {
+                req.getSession(false).invalidate();
+                resp.sendRedirect("index.jsp");
+                return; // Interrompe l'esecuzione
             } else {
-                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name or primary key.");
+                if (success) {
+                    jsonArray = getJsonArrayForTable(tableName);
+                }
+
+                if (jsonArray != null) {
+                    sendJsonResponse(jsonArray, resp);
+                } else {
+                    resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name or primary key.");
+                }
+            }
+        } catch (Exception e) {
+            log("Errore in doGet deleteRowServlet", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante l'operazione.");
             }
         }
     }
@@ -289,6 +295,13 @@ public class deleteRowServlet extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        doGet(req, resp);
+        try {
+            doGet(req, resp);
+        } catch (ServletException | IOException e) {
+            log("Errore in doPost deleteRowServlet", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante l'operazione.");
+            }
+        }
     }
 }

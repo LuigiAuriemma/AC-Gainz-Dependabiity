@@ -19,10 +19,11 @@ public class ProductServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        //prendiamo dalla request la primarykey del prodotto cliccato
-        String primaryKey = req.getParameter("primaryKey");
-        System.out.println(primaryKey);
-        if(primaryKey != null) {
+        try {
+            //prendiamo dalla request la primarykey del prodotto cliccato
+            String primaryKey = req.getParameter("primaryKey");
+            System.out.println(primaryKey);
+            if(primaryKey != null) {
                 //andiamo a prendere tutti i valori del prodotto selezionato
                 ProdottoDAO prodottoDAO = new ProdottoDAO();
                 Prodotto prodotto = prodottoDAO.doRetrieveById(primaryKey);
@@ -58,13 +59,29 @@ public class ProductServlet extends HttpServlet {
                     List<Prodotto> suggeriti = suggeritiDAO.doRetrieveByCriteria("categoria",category);
                     req.setAttribute("suggeriti",suggeriti);
                     req.setAttribute("prodotto",prodotto);
+
+                    // RIGA 61 FIX: Gestione eccezione forward
                     req.getRequestDispatcher("Product.jsp").forward(req,resp);
                 }
+            }
+        } catch (Exception e) {
+            log("Errore in ProductServlet doGet", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno nel recupero del prodotto.");
+            }
         }
     }
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        doGet(req,resp);
+        // RIGA 68 FIX: Gestione eccezioni doPost
+        try {
+            doGet(req,resp);
+        } catch (ServletException | IOException e) {
+            log("Errore in ProductServlet doPost", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+            }
+        }
     }
 }

@@ -22,45 +22,63 @@ public class ShowTasteServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        List<Prodotto> originalProducts = (List<Prodotto>) req.getSession().getAttribute("filteredProducts");
+        try {
+            List<Prodotto> originalProducts = (List<Prodotto>) req.getSession().getAttribute("filteredProducts");
 
-        if (originalProducts == null) {
-            originalProducts = new ArrayList<>();
+            if (originalProducts == null) {
+                originalProducts = new ArrayList<>();
+            }
+
+            // Creare una mappa per contare le occorrenze di ciascun gusto
+            Map<String, Integer> tasteCounts = new HashMap<>();
+            VarianteDAO varianteDAO = new VarianteDAO();
+
+            // Raccogliere tutte le varianti dei prodotti filtrati in una singola query
+            List<Variante> varianti = varianteDAO.doRetrieveVariantiByProdotti(originalProducts);
+
+            if (varianti == null) {
+                varianti = new ArrayList<>();
+            }
+
+            // Contare le occorrenze di ciascun gusto
+            for (Variante v : varianti) {
+                String gusto = v.getGusto();
+                tasteCounts.put(gusto, tasteCounts.getOrDefault(gusto, 0) + 1);
+            }
+
+            // Creare il JSONArray per la risposta contenente ogni varainte
+            JSONArray jsonArray = new JSONArray();
+            for (String key : tasteCounts.keySet()) {
+                String tasteWithCount = key + " (" + tasteCounts.get(key) + ")";
+                jsonArray.add(tasteWithCount);
+            }
+
+            // Impostare il tipo di contenuto e inviare la risposta
+            resp.setContentType("application/json");
+
+            // FIX RIGA 57: Gestione sicura dell'output stream
+            try (PrintWriter out = resp.getWriter()) {
+                out.println(jsonArray);
+                out.flush();
+            }
+        } catch (Exception e) {
+            log("Errore in ShowTasteServlet doGet", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno nel recupero dei gusti.");
+            }
         }
-
-        // Creare una mappa per contare le occorrenze di ciascun gusto
-        Map<String, Integer> tasteCounts = new HashMap<>();
-        VarianteDAO varianteDAO = new VarianteDAO();
-
-        // Raccogliere tutte le varianti dei prodotti filtrati in una singola query
-        List<Variante> varianti = varianteDAO.doRetrieveVariantiByProdotti(originalProducts);
-
-        if (varianti == null) {
-            varianti = new ArrayList<>();
-        }
-
-        // Contare le occorrenze di ciascun gusto
-        for (Variante v : varianti) {
-            String gusto = v.getGusto();
-            tasteCounts.put(gusto, tasteCounts.getOrDefault(gusto, 0) + 1);
-        }
-
-        // Creare il JSONArray per la risposta contenente ogni varainte
-        JSONArray jsonArray = new JSONArray();
-        for (String key : tasteCounts.keySet()) {
-            String tasteWithCount = key + " (" + tasteCounts.get(key) + ")";
-            jsonArray.add(tasteWithCount);
-        }
-
-        // Impostare il tipo di contenuto e inviare la risposta
-        resp.setContentType("application/json");
-        PrintWriter out = resp.getWriter();
-        out.println(jsonArray);
-        out.flush();
     }
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        doGet(req, resp);
+        // FIX RIGA 64: Protezione chiamata doGet
+        try {
+            doGet(req, resp);
+        } catch (ServletException | IOException e) {
+            log("Errore in ShowTasteServlet doPost", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+            }
+        }
     }
 }

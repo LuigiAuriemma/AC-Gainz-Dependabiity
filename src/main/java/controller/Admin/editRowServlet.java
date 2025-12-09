@@ -27,49 +27,56 @@ public class editRowServlet extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        // prende il nome della tabella e la primarykey dalla request
-        String tableName = req.getParameter("tableName");
-        String primaryKey = req.getParameter("primaryKey");
+        try {
+            // prende il nome della tabella e la primarykey dalla request
+            String tableName = req.getParameter("tableName");
+            String primaryKey = req.getParameter("primaryKey");
 
-        if (tableName == null || tableName.isBlank() || primaryKey == null || primaryKey.isBlank()) {
-            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parametri 'tableName' o 'primaryKey' mancanti.");
-            return;
-        }
+            if (tableName == null || tableName.isBlank() || primaryKey == null || primaryKey.isBlank()) {
+                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parametri 'tableName' o 'primaryKey' mancanti.");
+                return;
+            }
 
-        // Validazione whitelist
-        if (tableName == null || !VALID_TABLE_NAMES.contains(tableName)) {
-            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
-            return;
-        }
+            // Validazione whitelist
+            if (tableName == null || !VALID_TABLE_NAMES.contains(tableName)) {
+                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
+                return;
+            }
 
-        System.out.println("tableName: " + tableName);
+            System.out.println("tableName: " + tableName);
 
-        boolean success = false;
+            boolean success = false;
 
-        // in base a quale tabella viene scelta viene chiamato un metodo
-        // se il nome della tabella è errato manda un errore
-        switch (tableName) {
-            case "utente" ->
-                success = editUtente(req, primaryKey);
-            case "prodotto" ->
-                success = editProdotto(req, primaryKey);
-            case "variante" ->
-                success = editVariante(req, primaryKey);
-            case "ordine" ->
-                success = editOrdine(req, primaryKey);
-            case "dettaglioOrdine" ->
-                success = editDettaglioOrdine(req, primaryKey);
-            case "gusto" ->
-                success = editGusto(req, primaryKey);
-            case "confezione" ->
-                success = editConfezione(req, primaryKey);
-        }
+            // in base a quale tabella viene scelta viene chiamato un metodo
+            // se il nome della tabella è errato manda un errore
+            switch (tableName) {
+                case "utente" ->
+                        success = editUtente(req, primaryKey);
+                case "prodotto" ->
+                        success = editProdotto(req, primaryKey);
+                case "variante" ->
+                        success = editVariante(req, primaryKey);
+                case "ordine" ->
+                        success = editOrdine(req, primaryKey);
+                case "dettaglioOrdine" ->
+                        success = editDettaglioOrdine(req, primaryKey);
+                case "gusto" ->
+                        success = editGusto(req, primaryKey);
+                case "confezione" ->
+                        success = editConfezione(req, primaryKey);
+            }
 
-        // se ha funzionato tutto correttamente mostra la tabella
-        if (success) {
-            req.getRequestDispatcher("showTable?tableName=" + tableName).forward(req, resp);
-        } else {
-            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+            // se ha funzionato tutto correttamente mostra la tabella
+            if (success) {
+                req.getRequestDispatcher("showTable?tableName=" + tableName).forward(req, resp);
+            } else {
+                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+            }
+        } catch (Exception e) {
+            log("Errore in editRowServlet doPost", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la modifica.");
+            }
         }
     }
 
@@ -348,6 +355,13 @@ public class editRowServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        super.doGet(req, resp);
+        try {
+            super.doGet(req, resp);
+        } catch (Exception e) {
+            log("Errore in editRowServlet doGet", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+            }
+        }
     }
 }

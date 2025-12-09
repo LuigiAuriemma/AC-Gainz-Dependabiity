@@ -17,37 +17,54 @@ import java.util.List;
 public class AreaPersonaleServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        super.doGet(req, resp);
+        // RIGA 20 FIX: Gestione eccezioni per super.doGet
+        try {
+            super.doGet(req, resp);
+        } catch (ServletException | IOException e) {
+            log("Errore in AreaPersonaleServlet doGet", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+            }
+        }
     }
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        //prendiamo dati utente
-        HttpSession session = req.getSession();
-        Utente utente = (Utente) session.getAttribute("Utente");
+        try {
+            //prendiamo dati utente
+            HttpSession session = req.getSession();
+            Utente utente = (Utente) session.getAttribute("Utente");
 
-        if (utente != null) {
-            //prendiamo tutti gli ordini e i relativi dati sul singolo ordine
-            OrdineDao ordineDao = new OrdineDao();
-            List<Ordine> ordini = ordineDao.doRetrieveByEmail(utente.getEmail());
-            HashMap<Integer, List<DettaglioOrdine>> dettaglioOrdini = new HashMap<>();
-            DettaglioOrdineDAO dettaglioOrdineDAO = new DettaglioOrdineDAO();
+            if (utente != null) {
+                //prendiamo tutti gli ordini e i relativi dati sul singolo ordine
+                OrdineDao ordineDao = new OrdineDao();
+                List<Ordine> ordini = ordineDao.doRetrieveByEmail(utente.getEmail());
+                HashMap<Integer, List<DettaglioOrdine>> dettaglioOrdini = new HashMap<>();
+                DettaglioOrdineDAO dettaglioOrdineDAO = new DettaglioOrdineDAO();
 
-            for (Ordine ordine : ordini) {
-                //per ogni ordine prendiamo il resoconto dalla sua descrizione in modo da tenere salvati anche
-                //eventuali prodotti eliminati dal DB
-                if (ordine.getDescrizione() != null && !ordine.getDescrizione().isEmpty()) {
-                    List<DettaglioOrdine> dettagli = parseDescrizione(ordine.getDescrizione());
-                    dettaglioOrdini.put(ordine.getIdOrdine(), dettagli);
-                } else {
-                    List<DettaglioOrdine> dettagli = dettaglioOrdineDAO.doRetrieveById(ordine.getIdOrdine());
-                    dettaglioOrdini.put(ordine.getIdOrdine(), dettagli);
+                for (Ordine ordine : ordini) {
+                    //per ogni ordine prendiamo il resoconto dalla sua descrizione in modo da tenere salvati anche
+                    //eventuali prodotti eliminati dal DB
+                    if (ordine.getDescrizione() != null && !ordine.getDescrizione().isEmpty()) {
+                        List<DettaglioOrdine> dettagli = parseDescrizione(ordine.getDescrizione());
+                        dettaglioOrdini.put(ordine.getIdOrdine(), dettagli);
+                    } else {
+                        List<DettaglioOrdine> dettagli = dettaglioOrdineDAO.doRetrieveById(ordine.getIdOrdine());
+                        dettaglioOrdini.put(ordine.getIdOrdine(), dettagli);
+                    }
                 }
-            }
 
-            req.setAttribute("ordini", ordini);
-            req.setAttribute("dettaglioOrdini", dettaglioOrdini);
-            req.getRequestDispatcher("WEB-INF/AreaUtente.jsp").forward(req, resp);
+                req.setAttribute("ordini", ordini);
+                req.setAttribute("dettaglioOrdini", dettaglioOrdini);
+
+                // RIGA 50 FIX: Avvolto nel try-catch generale per gestire eccezioni di forward
+                req.getRequestDispatcher("WEB-INF/AreaUtente.jsp").forward(req, resp);
+            }
+        } catch (Exception e) {
+            log("Errore in AreaPersonaleServlet doPost", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore durante il recupero dell'area personale.");
+            }
         }
     }
 
@@ -69,19 +86,25 @@ public class AreaPersonaleServlet extends HttpServlet {
             float prezzo = 0;
 
             //prendiamo i valori per gli attributi
-            for (String attributo : attributi) {
-                attributo = attributo.trim(); // Rimuove gli spazi iniziali e finali
-                if (attributo.startsWith("Prodotto:")) {
-                    nomeProdotto = attributo.replace("Prodotto:", "").trim();
-                } else if (attributo.startsWith("Gusto:")) {
-                    gusto = attributo.replace("Gusto:", "").trim();
-                } else if (attributo.startsWith("Confezione:")) {
-                    pesoConfezione = Integer.parseInt(attributo.replace("Confezione:", "").replace(" grammi", "").trim());
-                } else if (attributo.startsWith("Quantità:")) {
-                    quantita = Integer.parseInt(attributo.replace("Quantità:", "").trim());
-                } else if (attributo.startsWith("Prezzo:")) {
-                    prezzo = Float.parseFloat(attributo.replace("Prezzo:", "").replace(" €", "").trim());
+            try {
+                for (String attributo : attributi) {
+                    attributo = attributo.trim(); // Rimuove gli spazi iniziali e finali
+                    if (attributo.startsWith("Prodotto:")) {
+                        nomeProdotto = attributo.replace("Prodotto:", "").trim();
+                    } else if (attributo.startsWith("Gusto:")) {
+                        gusto = attributo.replace("Gusto:", "").trim();
+                    } else if (attributo.startsWith("Confezione:")) {
+                        pesoConfezione = Integer.parseInt(attributo.replace("Confezione:", "").replace(" grammi", "").trim());
+                    } else if (attributo.startsWith("Quantità:")) {
+                        quantita = Integer.parseInt(attributo.replace("Quantità:", "").trim());
+                    } else if (attributo.startsWith("Prezzo:")) {
+                        prezzo = Float.parseFloat(attributo.replace("Prezzo:", "").replace(" €", "").trim());
+                    }
                 }
+            } catch (NumberFormatException e) {
+                // Logga l'errore di parsing ma continua con gli altri prodotti se possibile,
+                // oppure lascia che il catch nel doPost gestisca tutto.
+                continue;
             }
 
             //Creiamo il dettaglioOrdine
@@ -98,5 +121,3 @@ public class AreaPersonaleServlet extends HttpServlet {
         return dettagli;
     }
 }
-
-

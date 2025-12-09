@@ -16,7 +16,7 @@ import java.io.PrintWriter;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern; // Import necessario
+import java.util.regex.Pattern;
 
 import static controller.Filters.GenericFilterServlet.getJsonObject;
 
@@ -24,69 +24,67 @@ import static controller.Filters.GenericFilterServlet.getJsonObject;
 @WebServlet(value = "/searchBar")
 public class SearchBarServlet extends HttpServlet {
 
-    // 1. Definiamo la Regex per sanificare la barra di ricerca
-    // Accetta lettere, numeri, spazi, trattini, parentesi, apostrofi, punti, virgole e simboli ®™
     private static final Pattern SAFE_SEARCH_PATTERN = Pattern.compile("^[a-zA-Z0-9\\s\\-'.(),]+$");
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String rawName = req.getParameter("name");
+        try {
+            String rawName = req.getParameter("name");
 
-        // 2. Validazione: Se l'input è valido lo usiamo, altrimenti 'name' diventa null
-        String name = null;
-        if (rawName != null && SAFE_SEARCH_PATTERN.matcher(rawName).matches()) {
-            name = rawName;
-        }
-        // Se rawName conteneva caratteri pericolosi, 'name' resta null e il codice andrà nel ramo 'else' (sicuro)
-
-        HttpSession session = req.getSession();
-
-        synchronized (session) { //uso di synchronized per race conditions su session tramite ajax
-
-            List<Prodotto> products = new ArrayList<>();
-            String categoria = (String) session.getAttribute("categoriaRecovery");
-            ProdottoDAO prodottoDAO = new ProdottoDAO();
-
-            //prendiamo i prodotti in base a name (se è valido)
-            if (name != null && !name.isEmpty()) {
-                session.removeAttribute("categoria");  //per applicare i filtri
-
-                try {
-                    // Passiamo 'name' sanificato al DAO
-                    products = prodottoDAO.filterProducts("", "", "", "", name);
-
-                    // 3. Fix Trust Boundary Violation (Riga 44 originale)
-                    // Ora 'name' è sicuro e validato, Snyk non si lamenterà più
-                    session.setAttribute("searchBarName", name);
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-            //prendiamo i prodotti in base alla categoria
-            else {
-                session.removeAttribute("searchBarName");
-                session.setAttribute("categoria", categoria);
-                try {
-                    products = prodottoDAO.filterProducts(categoria, "", "", "", "");
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
-                }
+            // 2. Validazione
+            String name = null;
+            if (rawName != null && SAFE_SEARCH_PATTERN.matcher(rawName).matches()) {
+                name = rawName;
             }
 
+            HttpSession session = req.getSession();
 
-            // Save search results in originalProducts and products for further filtering
-            // Anche filteredProducts è sicuro perché deriva da query DB basate su input validati
-            session.setAttribute("filteredProducts", products);
-            /*session.setAttribute("products", products);*/
+            synchronized (session) {
+                List<Prodotto> products = new ArrayList<>();
+                String categoria = (String) session.getAttribute("categoriaRecovery");
+                ProdottoDAO prodottoDAO = new ProdottoDAO();
 
-            addToJson(products, session, req, resp);
+                //prendiamo i prodotti in base a name (se è valido)
+                if (name != null && !name.isEmpty()) {
+                    session.removeAttribute("categoria");
+
+                    try {
+                        products = prodottoDAO.filterProducts("", "", "", "", name);
+                        session.setAttribute("searchBarName", name);
+                    } catch (SQLException e) {
+                        log("Errore SQL ricerca per nome", e);
+                        if (!resp.isCommitted()) resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore database.");
+                        return;
+                    }
+                }
+                //prendiamo i prodotti in base alla categoria
+                else {
+                    session.removeAttribute("searchBarName");
+                    session.setAttribute("categoria", categoria);
+                    try {
+                        products = prodottoDAO.filterProducts(categoria, "", "", "", "");
+                    } catch (SQLException e) {
+                        log("Errore SQL ricerca per categoria", e);
+                        if (!resp.isCommitted()) resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore database.");
+                        return;
+                    }
+                }
+
+                session.setAttribute("filteredProducts", products);
+
+                addToJson(products, session, req, resp);
+            }
+        } catch (Exception e) {
+            log("Errore in SearchBarServlet doGet", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la ricerca.");
+            }
         }
     }
 
     private void addToJson(List<Prodotto> products, HttpSession session, HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
         JSONArray jsonArray = new JSONArray();
 
-        //prendiamo la lista di prodotti e li inseriamo in un JSONArray
         for (Prodotto p: products) {
             JSONObject jsonObject = getJsonObject(p);
 
@@ -103,6 +101,13 @@ public class SearchBarServlet extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        doGet(req, resp);
+        try {
+            doGet(req, resp);
+        } catch (ServletException | IOException e) {
+            log("Errore in SearchBarServlet doPost", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+            }
+        }
     }
 }

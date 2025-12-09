@@ -23,52 +23,47 @@ import java.util.regex.Pattern;
 @WebServlet("/genericFilter")
 public class GenericFilterServlet extends HttpServlet {
 
-    // 1. Definiamo le Regex e le Whitelist per la sicurezza
-    // Permette lettere, numeri, spazi, trattini e percentuale (per SQL like)
     private static final Pattern SAFE_TEXT_PATTERN = Pattern.compile("^[a-zA-Z0-9\\s\\-%]+$");
-    
-    // Lista chiusa dei metodi di ordinamento permessi nel DB
+
     private static final List<String> ALLOWED_SORTING = Arrays.asList(
-        "PriceDesc", "PriceAsc", "CaloriesDesc", "CaloriesAsc", "evidence", "default", ""
+            "PriceDesc", "PriceAsc", "CaloriesDesc", "CaloriesAsc", "evidence", "default", ""
     );
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
 
         HttpSession session = req.getSession();
-        synchronized (session) { 
+        synchronized (session) {
 
-            // --- SANIFICAZIONE NAME FORM ---
             String rawNameForm = req.getParameter("nameForm");
-            // Se esiste il parametro, lo validiamo prima di usarlo
+
             if (rawNameForm != null) {
-                // Se contiene caratteri strani, lo trattiamo come stringa vuota o errore
                 String safeNameForm = isValidInput(rawNameForm) ? rawNameForm : "";
-                
+
                 try {
                     handleNameForm(safeNameForm, req, resp, session);
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
+                } catch (SQLException | ServletException | IOException e) {
+                    log("Errore in handleNameForm", e);
+                    if (!resp.isCommitted()) {
+                        resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la ricerca.");
+                    }
                 }
                 return;
             }
 
-            // --- SANIFICAZIONE FILTRI ---
             String category = (String) session.getAttribute("categoria");
             String nameFilter = "";
             if (session.getAttribute("searchBarName") != null)
                 nameFilter = (String) session.getAttribute("searchBarName");
 
-            // Validazione input utente
             String rawWeight = req.getParameter("weight");
             String weightFilter = isValidInput(rawWeight) ? rawWeight : null;
 
             String rawTaste = req.getParameter("taste");
             String tasteFilter = isValidInput(rawTaste) ? rawTaste : null;
 
-            // Validazione Sorting tramite Whitelist
             String rawSorting = req.getParameter("sorting");
-            String sortingFilter = "default"; // Valore sicuro di default
+            String sortingFilter = "default";
             if (rawSorting != null && ALLOWED_SORTING.contains(rawSorting)) {
                 sortingFilter = rawSorting;
             }
@@ -77,14 +72,15 @@ public class GenericFilterServlet extends HttpServlet {
             ProdottoDAO prodottoDAO = new ProdottoDAO();
 
             try {
-                // Ora passiamo al DAO solo dati "puliti"
                 filteredProducts = prodottoDAO.filterProducts(category, sortingFilter, weightFilter, tasteFilter, nameFilter);
             } catch (SQLException e) {
-                throw new RuntimeException(e);
+                log("Errore in filterProducts", e);
+                if (!resp.isCommitted()) {
+                    resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante il filtraggio.");
+                }
+                return;
             }
 
-            // 2. Trust Boundary Violation FIX (Riga 64)
-            // Snyk ora sa che filteredProducts deriva da input validati, quindi è sicuro metterlo in sessione
             session.setAttribute("filteredProducts", filteredProducts);
 
             sendJsonResponse(resp, filteredProducts);
@@ -95,28 +91,24 @@ public class GenericFilterServlet extends HttpServlet {
         List<Prodotto> products = new ArrayList<>();
         ProdottoDAO prodottoDAO = new ProdottoDAO();
 
-        // nameForm qui è già stato validato nel doGet, ma per sicurezza ricontrolliamo o ci fidiamo
         if (nameForm.isBlank()){
             products = prodottoDAO.doRetrieveAll();
             session.removeAttribute("categoria");
         } else {
             products = prodottoDAO.filterProducts("", "", "", "", nameForm);
         }
-        
+
         request.setAttribute("originalProducts", products);
-        
-        // Salviamo in sessione solo il dato pulito
+
         session.setAttribute("searchBarName", nameForm);
-        
-        // 3. Trust Boundary Violation FIX (Riga 85)
+
         session.setAttribute("filteredProducts", products);
 
         request.getRequestDispatcher("FilterProducts.jsp").forward(request, response);
     }
 
-    // Metodo helper per validare stringhe generiche (evita XSS e caratteri strani)
     private boolean isValidInput(String input) {
-        if (input == null || input.isBlank()) return true; // Null è accettabile (vuol dire nessun filtro)
+        if (input == null || input.isBlank()) return true;
         return SAFE_TEXT_PATTERN.matcher(input).matches();
     }
 
@@ -162,6 +154,13 @@ public class GenericFilterServlet extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        doGet(req, resp);
+        try {
+            doGet(req, resp);
+        } catch (ServletException | IOException e) {
+            log("Errore in GenericFilterServlet doPost", e);
+            if (!resp.isCommitted()) {
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+            }
+        }
     }
 }

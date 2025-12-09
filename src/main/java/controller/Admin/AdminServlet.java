@@ -15,16 +15,28 @@ public class AdminServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
 
-        //prendiamo l'utente dalla sessione e controlliamo che abbia i poteri per accedere all'area admin
-        Utente x = null;
-        x = (Utente) req.getSession().getAttribute("Utente");
+        // Logica di controllo permessi
+        Utente x = (Utente) req.getSession().getAttribute("Utente");
+
         if (x != null && x.getPoteri()) {
-            req.getRequestDispatcher("WEB-INF/Admin/AreaAdmin.jsp").forward(req, resp);
+            try {
+                req.getRequestDispatcher("WEB-INF/Admin/AreaAdmin.jsp").forward(req, resp);
+            } catch (ServletException | IOException e) {
+                log("Errore nel forward AreaAdmin (doGet)", e);
+                resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore durante il caricamento della pagina Admin.");
+            }
+        } else {
+            resp.sendError(HttpServletResponse.SC_FORBIDDEN, "Accesso Negato");
         }
     }
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        doGet(req, resp);
+        try {
+            doGet(req, resp);
+        } catch (ServletException | IOException e) {
+            log("Errore nel doPost AdminServlet", e);
+            resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno nel processare la richiesta.");
+        }
     }
 }
