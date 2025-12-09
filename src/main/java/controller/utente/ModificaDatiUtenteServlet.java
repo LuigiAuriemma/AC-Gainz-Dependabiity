@@ -109,7 +109,7 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
             return;
         }
 
-        String hashedCurrentPassword = sha1(currentPassword);
+        String hashedCurrentPassword = sha512(currentPassword);
 
         System.out.println("Hashed current password: " + hashedCurrentPassword);
         System.out.println("Stored password: " + utente.getPassword());
@@ -357,12 +357,12 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
         requestDispatcher.forward(request, response);
     }
 
-    public String sha1(String pass) {
+    public String sha512(String pass) {
         try {
-            var digest = MessageDigest.getInstance("SHA-1");
+            var digest = MessageDigest.getInstance("SHA-512");
             digest.reset();
             digest.update(pass.getBytes(StandardCharsets.UTF_8));
-            pass = String.format("%040x", new BigInteger(1, digest.digest()));
+            pass = String.format("%0128x", new BigInteger(1, digest.digest()));
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException(e);
         }

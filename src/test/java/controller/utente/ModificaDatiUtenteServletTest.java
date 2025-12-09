@@ -23,7 +23,7 @@ import static org.mockito.Mockito.*;
 /**
  * Classe di test completa per ModificaDatiUtenteServlet.
  * NON usa spy() sulla servlet.
- * Testa il metodo sha1() e la logica di password
+ * Testa il metodo sha512() e la logica di password
  * usando dati coerenti preparati nel setup.
  * Usa MockedConstruction per il UtenteDAO.
  */
@@ -48,7 +48,7 @@ public class ModificaDatiUtenteServletTest {
         servlet = new ModificaDatiUtenteServlet();
 
         // 2. Calcoliamo l'hash REALE usando il metodo della servlet
-        HASHED_PASSWORD_IN_DB = servlet.sha1(PLAINTEXT_PASSWORD_CORRETTA);
+        HASHED_PASSWORD_IN_DB = servlet.sha512(PLAINTEXT_PASSWORD_CORRETTA);
 
         // 3. Mocks per le dipendenze servlet
         request = mock(HttpServletRequest.class);
@@ -69,14 +69,14 @@ public class ModificaDatiUtenteServletTest {
     }
 
     /**
-     * Test per il metodo di utilità sha1.
+     * Test per il metodo di utilità sha512.
      */
     @Test
-    @DisplayName("Il metodo sha1() calcola correttamente l'hash")
-    void sha1_HashesCorrectly() {
-        // Test con un valore noto (SHA-1 di "test")
-        String expectedHash = "a94a8fe5ccb19ba61c4c0873d391e987982fbbd3";
-        assertEquals(expectedHash, servlet.sha1("test"));
+    @DisplayName("Il metodo sha512() calcola correttamente l'hash")
+    void sha512_HashesCorrectly() {
+        // Test con un valore noto (SHA-512 di "test")
+        String expectedHash = "ee26b0dd4af7e749aa1a8ee3c10ae9923f618980772e473f8819a5d4940e0db27ac185f8a0e1d5f84f88bc887fd67b143732c304cc5fa9ad8e6f57f50028a8ff";
+        assertEquals(expectedHash, servlet.sha512("test"));
     }
 
     @Test

@@ -12,7 +12,7 @@ public class UtenteDAO {
     public Utente doRetrieveByEmailAndPassword(String email, String password) throws SQLException {
         Utente u = null; // Imposta l'utente a null inizialmente
         try (Connection con = ConPool.getConnection()){
-            PreparedStatement preparedStatement = con.prepareStatement("SELECT * FROM utente WHERE email=? AND password = SHA1(?)");
+            PreparedStatement preparedStatement = con.prepareStatement("SELECT * FROM utente WHERE email=? AND password = SHA2(?, 512)");
             preparedStatement.setString(1, email);
             preparedStatement.setString(2, password);
 
