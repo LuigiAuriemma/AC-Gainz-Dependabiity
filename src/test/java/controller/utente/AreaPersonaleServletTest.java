@@ -1,6 +1,8 @@
 package controller.utente;
 
 import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -32,8 +34,17 @@ public class AreaPersonaleServletTest {
     private RequestDispatcher dispatcher;
 
     @BeforeEach
-    void setup() {
+    void setup() throws Exception {
         servlet = new AreaPersonaleServlet();
+        
+        // Mock ServletConfig e ServletContext per permettere il logging
+        ServletConfig servletConfig = mock(ServletConfig.class);
+        ServletContext servletContext = mock(ServletContext.class);
+        when(servletConfig.getServletContext()).thenReturn(servletContext);
+        
+        // Inizializza il servlet con il config mockato
+        servlet.init(servletConfig);
+        
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         session = mock(HttpSession.class);
@@ -215,21 +226,29 @@ public class AreaPersonaleServletTest {
     // --- Test Fallimento Parsing (Dependability) ---
 
     @Test
-    @DisplayName("doPost lancia NumberFormatException se la descrizione è malformata")
-    void doPost_parseDescrizione_throwsNumberFormatException() throws Exception{
+    @DisplayName("doPost salta i prodotti malformati e continua l'elaborazione")
+    void doPost_parseDescrizione_skipsMalformedProducts() throws Exception {
         Utente utente = new Utente();
         utente.setEmail("user@example.com");
         when(session.getAttribute("Utente")).thenReturn(utente);
 
-        // Prepara un ordine con descrizione malformata
+        // Prepara un ordine con una descrizione contenente un prodotto malformato e uno valido
         Ordine ordine1 = new Ordine();
         ordine1.setIdOrdine(103);
-        String malformedDesc = "Prodotto: Proteine Whey\n" +
+        // Il primo prodotto ha una quantità malformata ("due" invece di un numero)
+        // Il secondo prodotto è valido
+        String mixedDesc = "Prodotto: Proteine Whey\n" +
                 "Gusto: Cioccolato\n" +
                 "Confezione: 900 grammi\n" +
                 "Quantità: due\n" +
-                "Prezzo: 45.50 €\n";
-        ordine1.setDescrizione(malformedDesc);
+                "Prezzo: 45.50 €\n" +
+                ";" +
+                "Prodotto: Creatina\n" +
+                "Gusto: Neutro\n" +
+                "Confezione: 500 grammi\n" +
+                "Quantità: 1\n" +
+                "Prezzo: 25.00 €\n";
+        ordine1.setDescrizione(mixedDesc);
         List<Ordine> ordini = List.of(ordine1);
 
         try (MockedConstruction<OrdineDao> mockedOrdineDao = mockConstruction(OrdineDao.class, (mock, ctx) -> {
@@ -237,14 +256,30 @@ public class AreaPersonaleServletTest {
         });
              MockedConstruction<DettaglioOrdineDAO> mockedDettaglioDao = mockConstruction(DettaglioOrdineDAO.class)) {
 
-            // VERIFICA CHIAVE: Ci aspettiamo che la servlet lanci l'eccezione
-            assertThrows(NumberFormatException.class, () -> {
-                servlet.doPost(request, response);
-            });
+            servlet.doPost(request, response);
 
-            // VERIFICA CHIAVE 2: L'inoltro non deve avvenire
-            verify(dispatcher, never()).forward(request, response);
-            // Il DAO dei dettagli non deve essere chiamato
+            // VERIFICA CHIAVE: La servlet gestisce l'errore gracefully e continua
+            // Cattura la mappa "dettaglioOrdini"
+            ArgumentCaptor<HashMap> mapCaptor = ArgumentCaptor.forClass(HashMap.class);
+            verify(request).setAttribute(eq("dettaglioOrdini"), mapCaptor.capture());
+            HashMap<Integer, List<DettaglioOrdine>> capturedMap = mapCaptor.getValue();
+
+            // La mappa contiene l'ordine
+            assertTrue(capturedMap.containsKey(103));
+            List<DettaglioOrdine> dettagli = capturedMap.get(103);
+            
+            // VERIFICA: Solo il prodotto valido (Creatina) è stato aggiunto
+            // Il prodotto malformato (Proteine Whey con quantità "due") è stato saltato
+            assertEquals(1, dettagli.size());
+            assertEquals("Creatina", dettagli.get(0).getNomeProdotto());
+            assertEquals("Neutro", dettagli.get(0).getGusto());
+            assertEquals(500, dettagli.get(0).getPesoConfezione());
+            assertEquals(1, dettagli.get(0).getQuantita());
+            assertEquals(25.00f, dettagli.get(0).getPrezzo());
+
+            // L'inoltro deve avvenire normalmente
+            verify(dispatcher).forward(request, response);
+            // Il DAO dei dettagli non deve essere chiamato (usiamo la descrizione)
             verify(mockedDettaglioDao.constructed().get(0), never()).doRetrieveById(anyInt());
         }
     }

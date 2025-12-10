@@ -1,6 +1,8 @@
 package controller.Filters;
 
 import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -25,6 +27,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -45,8 +48,17 @@ public class GenericFilterServletTest {
     private PrintWriter printWriter;
 
     @BeforeEach
-    void setup() throws IOException {
+    void setup() throws Exception {
         servlet = new GenericFilterServlet();
+        
+        // Mock ServletConfig e ServletContext per permettere il logging
+        ServletConfig servletConfig = mock(ServletConfig.class);
+        ServletContext servletContext = mock(ServletContext.class);
+        when(servletConfig.getServletContext()).thenReturn(servletContext);
+        
+        // Inizializza il servlet con il config mockato
+        servlet.init(servletConfig);
+        
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         session = mock(HttpSession.class);
@@ -225,8 +237,8 @@ public class GenericFilterServletTest {
         }
 
         @Test
-        @DisplayName("nameForm lancia SQLException -> Rilancia RuntimeException")
-        void nameForm_sqlException_throwsRuntime() throws SQLException {
+        @DisplayName("nameForm lancia SQLException -> Invia errore 500")
+        void nameForm_sqlException_sendsError() throws Exception {
             when(request.getParameter("nameForm")).thenReturn("Proteine");
 
             try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
@@ -234,13 +246,10 @@ public class GenericFilterServletTest {
                 when(mock.filterProducts(any(), any(), any(), any(), any())).thenThrow(new SQLException("DB Error"));
             })) {
 
-                // Verifica che la servlet catturi l'eccezione e la rilanci
-                RuntimeException ex = assertThrows(RuntimeException.class, () -> {
-                    servlet.doGet(request, response);
-                });
+                servlet.doGet(request, response);
 
-                // Verifica che la causa sia l'eccezione SQL
-                assertTrue(ex.getCause() instanceof SQLException);
+                // Verifica che la servlet catturi l'eccezione e invii un errore 500
+                verify(response).sendError(eq(HttpServletResponse.SC_INTERNAL_SERVER_ERROR), anyString());
             }
         }
     }
@@ -289,8 +298,8 @@ public class GenericFilterServletTest {
         }
 
         @Test
-        @DisplayName("Filtro AJAX lancia SQLException -> Rilancia RuntimeException")
-        void ajaxFilter_sqlException_throwsRuntime() throws SQLException {
+        @DisplayName("Filtro AJAX lancia SQLException -> Invia errore 500")
+        void ajaxFilter_sqlException_sendsError() throws Exception {
             when(request.getParameter("nameForm")).thenReturn(null); // Attiva modalità AJAX
 
             try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
@@ -298,11 +307,10 @@ public class GenericFilterServletTest {
                 when(mock.filterProducts(any(), any(), any(), any(), any())).thenThrow(new SQLException("DB Error"));
             })) {
 
-                RuntimeException ex = assertThrows(RuntimeException.class, () -> {
-                    servlet.doGet(request, response);
-                });
+                servlet.doGet(request, response);
 
-                assertTrue(ex.getCause() instanceof SQLException);
+                // Verifica che la servlet catturi l'eccezione e invii un errore 500
+                verify(response).sendError(eq(HttpServletResponse.SC_INTERNAL_SERVER_ERROR), anyString());
             }
         }
 

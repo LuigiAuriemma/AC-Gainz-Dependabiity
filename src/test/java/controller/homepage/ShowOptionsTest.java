@@ -1,5 +1,7 @@
 package controller.homepage;
 
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -41,10 +43,18 @@ public class ShowOptionsTest {
     private PrintWriter printWriter;
 
     @BeforeEach
-    void setup() throws IOException {
+    void setup() throws Exception {
         servlet = new ShowOptions();
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
+
+        // Mock ServletConfig e ServletContext per permettere il logging
+        ServletConfig servletConfig = mock(ServletConfig.class);
+        ServletContext servletContext = mock(ServletContext.class);
+        when(servletConfig.getServletContext()).thenReturn(servletContext);
+        
+        // Inizializza il servlet con il config mockato
+        servlet.init(servletConfig);
 
         // Prepariamo un writer in memoria per catturare l'output JSON
         stringWriter = new StringWriter();
@@ -251,8 +261,8 @@ public class ShowOptionsTest {
     }
 
     @Test
-    @DisplayName("updateOptions con Prodotto null -> NullPointerException")
-    void updateOptions_nullProduct_throwsNPE() {
+    @DisplayName("updateOptions con Prodotto null -> Nessun output")
+    void updateOptions_nullProduct_doesNothing() throws ServletException, IOException {
         when(request.getParameter("action")).thenReturn("updateOptions");
         when(request.getParameter("idProdotto")).thenReturn("P1");
         when(request.getParameter("flavour")).thenReturn("Vaniglia");
@@ -261,10 +271,10 @@ public class ShowOptionsTest {
             when(mock.doRetrieveById("P1")).thenReturn(null); // Prodotto non trovato
         })) {
 
-            // Il codice della servlet (p.getIdProdotto()) lancerà NPE
-            assertThrows(NullPointerException.class, () -> {
-                servlet.doGet(request, response);
-            });
+            servlet.doGet(request, response);
+            
+            // Verifica che non sia stato prodotto nessun output
+            assertTrue(getJsonOutput().isEmpty());
         }
     }
 
@@ -301,25 +311,23 @@ public class ShowOptionsTest {
     }
 
     @Test
-    @DisplayName("updatePrice con 'weight' non valido -> NumberFormatException")
-    void updatePrice_invalidWeight_throwsNFE() {
+    @DisplayName("updatePrice con 'weight' non valido -> Nessun output")
+    void updatePrice_invalidWeight_doesNothing() throws ServletException, IOException {
         when(request.getParameter("action")).thenReturn("updatePrice");
         when(request.getParameter("idProdotto")).thenReturn("P1");
         when(request.getParameter("flavour")).thenReturn("Vaniglia");
         when(request.getParameter("weight")).thenReturn("abc"); // Peso non valido
 
-        // Il codice della servlet (Integer.parseInt) lancerà NPE
-        assertThrows(NumberFormatException.class, () -> {
-            servlet.doGet(request, response);
-        });
+        servlet.doGet(request, response);
 
-        // Verifichiamo che non abbia scritto nulla prima del crash
+        // Verifica che non sia stato prodotto nessun output
+        // (l'eccezione NumberFormatException viene catturata)
         assertTrue(getJsonOutput().isEmpty());
     }
 
     @Test
-    @DisplayName("updatePrice con Variante non trovata -> IndexOutOfBoundsException")
-    void updatePrice_variantNotFound_throwsIOOBE() {
+    @DisplayName("updatePrice con Variante non trovata -> Nessun output")
+    void updatePrice_variantNotFound_doesNothing() throws ServletException, IOException {
         when(request.getParameter("action")).thenReturn("updatePrice");
         when(request.getParameter("idProdotto")).thenReturn("P1");
         when(request.getParameter("flavour")).thenReturn("Ananas");
@@ -334,10 +342,11 @@ public class ShowOptionsTest {
                             .thenReturn(new ArrayList<>());
                 })) {
 
-            // Il codice della servlet (...get(0)) lancerà l'eccezione
-            assertThrows(IndexOutOfBoundsException.class, () -> {
-                servlet.doGet(request, response);
-            });
+            servlet.doGet(request, response);
+
+            // Verifica che il servlet non scriva output prima di crashare
+            // e che l'eccezione venga gestita dal try-catch generale
+            assertTrue(getJsonOutput().isEmpty());
         }
     }
 

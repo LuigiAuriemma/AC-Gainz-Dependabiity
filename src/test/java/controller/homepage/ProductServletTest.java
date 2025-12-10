@@ -1,6 +1,8 @@
 package controller.homepage;
 
 import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -35,11 +37,19 @@ public class ProductServletTest {
     private RequestDispatcher dispatcher;
 
     @BeforeEach
-    void setup() {
+    void setup() throws Exception {
         servlet = new ProductServlet();
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         dispatcher = mock(RequestDispatcher.class);
+
+        // Mock ServletConfig e ServletContext per permettere il logging
+        ServletConfig servletConfig = mock(ServletConfig.class);
+        ServletContext servletContext = mock(ServletContext.class);
+        when(servletConfig.getServletContext()).thenReturn(servletContext);
+        
+        // Inizializza il servlet con il config mockato
+        servlet.init(servletConfig);
 
         // Stub di base per il forward
         when(request.getRequestDispatcher("Product.jsp")).thenReturn(dispatcher);
@@ -111,8 +121,8 @@ public class ProductServletTest {
     // --- Test 4: Vulnerabilità (Varianti vuote) ---
 
     @Test
-    @DisplayName("doGet con Varianti vuote lancia IndexOutOfBoundsException")
-    void doGet_emptyVarianti_throwsException() throws ServletException, IOException {
+    @DisplayName("doGet con Varianti vuote invia errore INTERNAL_SERVER_ERROR")
+    void doGet_emptyVarianti_sendsError() throws ServletException, IOException {
         String primaryKey = "123";
         when(request.getParameter("primaryKey")).thenReturn(primaryKey);
 
@@ -127,11 +137,12 @@ public class ProductServletTest {
         });
                 MockedConstruction<VarianteDAO> mockedVarDao = mockConstruction(VarianteDAO.class)) {
 
-            // VERIFICA CHIAVE: ci aspettiamo un crash
-            // Questo accade perché il codice chiama varianti.get(0).getGusto()
-            assertThrows(IndexOutOfBoundsException.class, () -> {
-                servlet.doGet(request, response);
-            });
+            // Eseguiamo la servlet - non deve lanciare eccezioni perché sono gestite
+            servlet.doGet(request, response);
+
+            // Verifica che sia stato inviato un errore INTERNAL_SERVER_ERROR
+            // a causa dell'IndexOutOfBoundsException catturata
+            verify(response).sendError(eq(HttpServletResponse.SC_INTERNAL_SERVER_ERROR), anyString());
 
             // Verifichiamo che il forward non sia avvenuto
             verify(dispatcher, never()).forward(request, response);

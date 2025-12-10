@@ -1,5 +1,7 @@
 package controller.Filters;
 
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -22,6 +24,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -40,11 +43,19 @@ public class SearchBarServletTest {
     private PrintWriter printWriter;
 
     @BeforeEach
-    void setup() throws IOException {
+    void setup() throws Exception {
         servlet = new SearchBarServlet();
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         session = mock(HttpSession.class);
+
+        // Mock ServletConfig e ServletContext per permettere il logging
+        ServletConfig servletConfig = mock(ServletConfig.class);
+        ServletContext servletContext = mock(ServletContext.class);
+        when(servletConfig.getServletContext()).thenReturn(servletContext);
+        
+        // Inizializza il servlet con il config mockato
+        servlet.init(servletConfig);
 
         // Prepariamo un writer in memoria per catturare l'output JSON
         stringWriter = new StringWriter();
@@ -151,18 +162,18 @@ public class SearchBarServletTest {
     }
 
     @Test
-    @DisplayName("Ramo 1 (Faglia): Ricerca per Nome lancia SQLException")
-    void searchByName_sqlException_throwsRuntime() throws SQLException {
+    @DisplayName("Ramo 1 (Faglia): Ricerca per Nome con SQLException invia errore")
+    void searchByName_sqlException_sendsError() throws SQLException, ServletException, IOException {
         when(request.getParameter("name")).thenReturn("Whey");
 
         try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
             when(mock.filterProducts(any(), any(), any(), any(), any())).thenThrow(new SQLException("DB Fail"));
         })) {
 
-            RuntimeException ex = assertThrows(RuntimeException.class, () -> {
-                servlet.doGet(request, response);
-            });
-            assertTrue(ex.getCause() instanceof SQLException);
+            servlet.doGet(request, response);
+
+            // Verifica che sia stato inviato un errore INTERNAL_SERVER_ERROR
+            verify(response).sendError(eq(500), anyString());
         }
     }
 
@@ -218,18 +229,18 @@ public class SearchBarServletTest {
     }
 
     @Test
-    @DisplayName("Ramo 2 (Faglia): Ricerca per Categoria lancia SQLException")
-    void searchByCategory_sqlException_throwsRuntime() throws SQLException {
+    @DisplayName("Ramo 2 (Faglia): Ricerca per Categoria con SQLException invia errore")
+    void searchByCategory_sqlException_sendsError() throws SQLException, ServletException, IOException {
         when(request.getParameter("name")).thenReturn(null); // Ramo categoria
 
         try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
             when(mock.filterProducts(any(), any(), any(), any(), any())).thenThrow(new SQLException("DB Fail"));
         })) {
 
-            RuntimeException ex = assertThrows(RuntimeException.class, () -> {
-                servlet.doGet(request, response);
-            });
-            assertTrue(ex.getCause() instanceof SQLException);
+            servlet.doGet(request, response);
+
+            // Verifica che sia stato inviato un errore INTERNAL_SERVER_ERROR
+            verify(response).sendError(eq(500), anyString());
         }
     }
 }

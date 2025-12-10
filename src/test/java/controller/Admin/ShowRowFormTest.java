@@ -1,5 +1,7 @@
 package controller.Admin;
 
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -28,6 +30,8 @@ import java.io.StringWriter;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -45,10 +49,18 @@ public class ShowRowFormTest {
     private PrintWriter printWriter;
 
     @BeforeEach
-    void setup() throws IOException {
+    void setup() throws Exception {
         servlet = new showRowForm();
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
+
+        // Mock ServletConfig e ServletContext per permettere il logging
+        ServletConfig servletConfig = mock(ServletConfig.class);
+        ServletContext servletContext = mock(ServletContext.class);
+        when(servletConfig.getServletContext()).thenReturn(servletContext);
+        
+        // Inizializza il servlet con il config mockato
+        servlet.init(servletConfig);
 
         // Prepariamo un writer in memoria per catturare l'output JSON
         stringWriter = new StringWriter();
@@ -352,14 +364,15 @@ public class ShowRowFormTest {
     // --- Test 5: Additional Edge Cases (Coverage Improvement) ---
 
     @Test
-    @DisplayName("doGet con 'tableName' non valido -> Lancia ServletException")
-    void doGet_invalidTableName_throwsServletException() {
+    @DisplayName("doGet con 'tableName' non valido -> Invia errore BAD_REQUEST")
+    void doGet_invalidTableName_sendsBadRequest() throws ServletException, IOException {
         when(request.getParameter("tableName")).thenReturn("invalidTable");
         when(request.getParameter("primaryKey")).thenReturn("1");
 
-        assertThrows(ServletException.class, () -> {
-            servlet.doGet(request, response);
-        });
+        servlet.doGet(request, response);
+
+        // Verifica che sia stato inviato un errore BAD_REQUEST
+        verify(response).sendError(eq(HttpServletResponse.SC_BAD_REQUEST), anyString());
     }
 
     @Test

@@ -60,39 +60,42 @@ public class OrdineServletTest {
         verify(response).sendError(eq(HttpServletResponse.SC_METHOD_NOT_ALLOWED), anyString());
     }
 
-    // --- Test 2: FAGLIA 1 (Sessione null) ---
+    // --- Test 2: Sessione null ---
 
     @Test
-    @DisplayName("doPost con sessione nulla lancia NullPointerException")
-    void sessioneNulla_lanciaNPE() throws ServletException, IOException {
+    @DisplayName("doPost con sessione nulla fa redirect a index.jsp")
+    void sessioneNulla_redirectToIndex() throws ServletException, IOException {
         // La servlet chiama req.getSession(false), che restituisce null
         when(request.getSession(false)).thenReturn(null);
 
-        // Il codice fallisce a session.getAttribute("cart")
-        assertThrows(NullPointerException.class, () -> {
-            servlet.doPost(request, response);
-        });
+        servlet.doPost(request, response);
 
-        // Verifichiamo che non abbia nemmeno provato a fare il forward
+        // Verifica che venga fatto il redirect
+        verify(response).sendRedirect("index.jsp");
+
+        // Verifichiamo che non abbia provato a fare il forward
         verify(dispatcher, never()).forward(request, response);
     }
 
-    // --- Test 3: FAGLIA 2 (Carrello null) ---
+    // --- Test 3: Carrello null ---
 
     @Test
-    @DisplayName("doPost con carrello nullo lancia NullPointerException")
-    void carrelloNullo_lanciaNPE() throws ServletException, IOException {
+    @DisplayName("doPost con carrello nullo non fa nulla")
+    void carrelloNullo_nonFaNulla() throws ServletException, IOException {
         // L'utente ha una sessione
         when(request.getSession(false)).thenReturn(session);
         // Ma il carrello non è mai stato inizializzato
         when(session.getAttribute("cart")).thenReturn(null);
 
-        // Il codice fallisce a if (!cart.isEmpty()...)
-        assertThrows(NullPointerException.class, () -> {
-            servlet.doPost(request, response);
-        });
+        // Usiamo MockedConstruction per verificare che NESSUN DAO venga creato
+        try (MockedConstruction<OrdineDao> mockedOrd = mockConstruction(OrdineDao.class)) {
 
-        verify(dispatcher, never()).forward(request, response);
+            servlet.doPost(request, response);
+
+            // L'if (cart != null && ...) fallisce, nessun DAO creato
+            assertEquals(0, mockedOrd.constructed().size());
+            verify(dispatcher, never()).forward(request, response);
+        }
     }
 
     // --- Test 4: Utente non loggato ---

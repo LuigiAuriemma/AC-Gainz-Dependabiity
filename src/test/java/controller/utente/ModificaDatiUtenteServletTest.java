@@ -1,6 +1,8 @@
 package controller.utente;
 
 import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -43,25 +45,33 @@ public class ModificaDatiUtenteServletTest {
     private String HASHED_PASSWORD_IN_DB;
 
     @BeforeEach
-    void setup() {
+    void setup() throws Exception {
         // 1. Istanziamo la servlet normally (NON è uno spy)
         servlet = new ModificaDatiUtenteServlet();
 
-        // 2. Calcoliamo l'hash REALE usando il metodo della servlet
+        // 2. Mock ServletConfig e ServletContext per permettere il logging
+        ServletConfig servletConfig = mock(ServletConfig.class);
+        ServletContext servletContext = mock(ServletContext.class);
+        when(servletConfig.getServletContext()).thenReturn(servletContext);
+        
+        // Inizializza il servlet con il config mockato
+        servlet.init(servletConfig);
+
+        // 3. Calcoliamo l'hash REALE usando il metodo della servlet
         HASHED_PASSWORD_IN_DB = servlet.sha512(PLAINTEXT_PASSWORD_CORRETTA);
 
-        // 3. Mocks per le dipendenze servlet
+        // 4. Mocks per le dipendenze servlet
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         session = mock(HttpSession.class);
         dispatcher = mock(RequestDispatcher.class);
 
-        // 4. Creiamo un utente REALE con l'hash REALE
+        // 5. Creiamo un utente REALE con l'hash REALE
         realUtente = new Utente();
         realUtente.setEmail("user@example.com");
         realUtente.setPassword(HASHED_PASSWORD_IN_DB); // <-- L'hash reale
 
-        // 5. Stub di base
+        // 6. Stub di base
         when(request.getSession()).thenReturn(session);
         when(session.getAttribute("Utente")).thenReturn(realUtente);
         when(request.getRequestDispatcher("areaUtenteServlet")).thenReturn(dispatcher);
@@ -500,31 +510,18 @@ public class ModificaDatiUtenteServletTest {
     }
 
     @Test
-    @DisplayName("Modifica Data Nascita: Errore Parsing (ServletException)")
+    @DisplayName("Modifica Data Nascita: Errore Parsing (Gestito dal servlet)")
     void handleDataNascitaChange_ParseError() throws Exception {
         when(request.getParameter("field")).thenReturn("data-di-nascita");
-        when(request.getParameter("new-birthdate")).thenReturn("2000-99-99"); // Data non valida per SimpleDateFormat
-                                                                              // (ma potrebbe non lanciare
-                                                                              // ParseException se leniente)
-        // Per forzare ParseException, usiamo una stringa che sicuramente fallisce il
-        // parsing con yyyy-MM-dd se non è leniente,
-        // ma SimpleDateFormat è leniente di default.
-        // Tuttavia, il codice fa:
-        // String[] fieldsDate = ddn.split("-");
-        // int flag = Integer.parseInt(fieldsDate[0]);
-        // Se passiamo "invalid-date", split potrebbe non dare 3 elementi o parseInt
-        // fallire.
-        // Ma il codice cattura ParseException SOLO sulla sdf.parse(ddn).
-        // Proviamo con una data che passa il check dell'anno ma fallisce il parsing
-        // (es. "2000-bad-date")
-        // Ma "2000-bad-date".split("-") -> ["2000", "bad", "date"]. parseInt("2000")
-        // ok.
-        // sdf.parse("2000-bad-date") -> ParseException.
-
+        // Data che passa il check dell'anno ma fallisce il parsing
         when(request.getParameter("new-birthdate")).thenReturn("2000-bad-date");
 
         try (MockedConstruction<UtenteDAO> mocked = mockConstruction(UtenteDAO.class)) {
-            assertThrows(ServletException.class, () -> servlet.doPost(request, response));
+            servlet.doPost(request, response);
+            
+            // Il servlet cattura la ServletException causata da ParseException
+            // e invia un errore 500
+            verify(response).sendError(eq(HttpServletResponse.SC_INTERNAL_SERVER_ERROR), anyString());
         }
     }
 
