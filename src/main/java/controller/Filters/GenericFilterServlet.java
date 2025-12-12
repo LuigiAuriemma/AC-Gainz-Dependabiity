@@ -84,7 +84,14 @@ public class GenericFilterServlet extends HttpServlet {
 
             session.setAttribute("filteredProducts", filteredProducts);
 
-            sendJsonResponse(resp, filteredProducts);
+            try {
+                sendJsonResponse(resp, filteredProducts);
+            } catch (IOException e) {
+                log("Errore in sendJsonResponse", e);
+                if (!resp.isCommitted()) {
+                    ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore durante l'invio della risposta JSON.");
+                }
+            }
         }
     }
 

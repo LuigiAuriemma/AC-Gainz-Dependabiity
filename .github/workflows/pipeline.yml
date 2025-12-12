@@ -7,8 +7,41 @@ on:
     branches: [ "main" ]
 
 jobs:
-  # --- JOB 1: TEST & COVERAGE ---
+  # --- JOB 1: SECURITY SCANNING ---
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # --- GitGuardian Secret Scanning ---
+      - name: GitGuardian Scan
+        uses: GitGuardian/ggshield-action@v1
+        env:
+          GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
+        with:
+          args: secret scan path .
+
+      # --- Snyk Security Scanning ---
+      - name: Set up JDK 21 for Snyk
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/maven@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+  # --- JOB 2: TEST & COVERAGE ---
   test:
+
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,9 +66,58 @@ jobs:
           fail_ci_if_error: true
           verbose: true
 
-  # --- JOB 2: BUILD E DEPLOY SU DOCKER HUB ---
+      # Upload artifacts per SonarQube
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            target/site/jacoco/
+            target/surefire-reports/
+          retention-days: 1
+
+  # --- JOB 3: SONARQUBE ANALYSIS ---
+  sonarqube:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Necessario per SonarQube
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      # Download coverage reports dal job test
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-reports
+          path: target/
+
+      - name: Cache SonarQube packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: SonarQube Scan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          mvn -B sonar:sonar \
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }} \
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+
+  # --- JOB 4: BUILD E DEPLOY SU DOCKER HUB ---
   build_and_push_docker:
-    needs: test # Questo job parte solo se 'test' (e quindi anche coverage) ha successo
+    needs: [test, security, sonarqube]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
