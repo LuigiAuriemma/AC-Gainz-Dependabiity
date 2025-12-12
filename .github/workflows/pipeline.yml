@@ -40,13 +40,24 @@ jobs:
           distribution: ${{ env.JAVA_DISTRO }}
           cache: maven
 
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/maven@master
-        continue-on-error: true # Nota: Rimuovi questa riga se vuoi bloccare il deploy in caso di vulnerabilità
+      - name: Install Snyk CLI
+        uses: snyk/actions/setup@master
+
+        # Rende eseguibile il wrapper maven per evitare errore -13
+      - name: Fix Maven Wrapper permissions
+        run: chmod +x mvnw
+
+      - name: Snyk Open Source (Dependencies)
+        continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --severity-threshold=high
+        run: snyk test --file=pom.xml --severity-threshold=high
+
+      - name: Snyk Code (SAST)
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk code test
 
   # --- JOB 2: TEST & COVERAGE ---
   test:
