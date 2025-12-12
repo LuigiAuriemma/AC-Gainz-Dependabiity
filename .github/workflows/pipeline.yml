@@ -86,70 +86,10 @@ jobs:
           fail_ci_if_error: true
           verbose: true
 
-      # Upload artifacts per SonarQube
-      - name: Upload coverage artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-reports
-          path: |
-            target/site/jacoco/
-            target/surefire-reports/
-          retention-days: 1
-
-  # --- JOB 3: SONARQUBE ANALYSIS ---
-  sonarqube:
-    name: 🔍 SonarQube Analysis
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Necessario per SonarQube
-
-      - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: ${{ env.JAVA_DISTRO }}
-          cache: maven
-
-      - name: Cache SonarQube packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
-
-      # Download coverage reports dal job test
-      - name: Download coverage artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-reports
-          path: target/
-
-      # Compile classes needed for SonarQube analysis
-      - name: Compile project
-        run: mvn -B compile test-compile
-
-      - name: SonarQube Scan
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: |
-          mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }} \
-            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }} \
-            -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.qualitygate.wait=false \
-            -Dsonar.scm.provider=git
-
-  # --- JOB 4: BUILD E DEPLOY SU DOCKER HUB ---
+  # --- JOB 3: BUILD E DEPLOY SU DOCKER HUB ---
   build_and_push_docker:
     name: 🐳 Build & Push Docker
-    # FIX APPLICATO: Ottimizzazione grafico (DAG)
-    # Rimosso 'test' perché implicito in 'sonarqube'.
-    # Ora il grafico sarà una forchetta che si chiude qui.
-    needs: [sonarqube, security]
+    needs: [security, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
