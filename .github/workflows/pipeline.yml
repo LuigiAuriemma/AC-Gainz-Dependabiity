@@ -6,34 +6,43 @@ on:
   pull_request:
     branches: [ "main" ]
 
+# --- VARIABILI GLOBALI ---
+# Definiamo qui le versioni per non ripeterle in ogni job
+env:
+  JAVA_VERSION: '21'
+  JAVA_DISTRO: 'temurin'
+  SONAR_MAVEN_PLUGIN_VERSION: '3.10.0.2594' # Versione stabile per evitare il crash
+
 jobs:
   # --- JOB 1: SECURITY SCANNING ---
   security:
+    name: 🛡️ Security Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Necessario per scansionare la history dei segreti
 
       # --- GitGuardian Secret Scanning ---
+      # FIX APPLICATO: rimosso 'secret scan' dagli args perché ridondante
       - name: GitGuardian Scan
         uses: GitGuardian/ggshield-action@v1
         env:
           GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
         with:
-          args: secret scan path .
+          args: path .
 
       # --- Snyk Security Scanning ---
-      - name: Set up JDK 21 for Snyk
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRO }}
           cache: maven
 
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/maven@master
-        continue-on-error: true
+        continue-on-error: true # Nota: Rimuovi questa riga se vuoi bloccare il deploy in caso di vulnerabilità
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -41,16 +50,16 @@ jobs:
 
   # --- JOB 2: TEST & COVERAGE ---
   test:
-
+    name: 🧪 Test & Coverage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 21
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRO }}
           cache: maven
 
       # Usiamo 'verify' per attivare JaCoCo nel pom.xml
@@ -78,6 +87,7 @@ jobs:
 
   # --- JOB 3: SONARQUBE ANALYSIS ---
   sonarqube:
+    name: 🔍 SonarQube Analysis
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -85,11 +95,11 @@ jobs:
         with:
           fetch-depth: 0  # Necessario per SonarQube
 
-      - name: Set up JDK 21
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRO }}
           cache: maven
 
       # Download coverage reports dal job test
@@ -106,18 +116,23 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
+      # FIX APPLICATO: versione esplicita del plugin per evitare errore "Map is null"
       - name: SonarQube Scan
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          mvn -B sonar:sonar \
+          mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }} \
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
 
   # --- JOB 4: BUILD E DEPLOY SU DOCKER HUB ---
   build_and_push_docker:
-    needs: [test, security, sonarqube]
+    name: 🐳 Build & Push Docker
+    # FIX APPLICATO: Ottimizzazione grafico (DAG)
+    # Rimosso 'test' perché implicito in 'sonarqube'.
+    # Ora il grafico sarà una forchetta che si chiude qui.
+    needs: [sonarqube, security]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
