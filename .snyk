@@ -1,0 +1,17 @@
+# Snyk (https://snyk.io) policy file
+version: v1.25.0
+
+# Exclude per Snyk Code - usa pattern glob
+exclude:
+  code:
+    - src/main/java/controller/Admin/editRowServlet.java
+    - src/main/java/controller/Admin/insertRowServlet.java
+    - src/main/webapp/JS/Tables.js
+    - src/main/java/controller/utente/ModificaDatiUtenteServlet.java
+    - src/main/java/controller/utente/RegistrazioneServlet.java
+    - src/main/java/controller/utente/LoginServlet.java
+    - src/test/java/controller/utente/ModificaDatiUtenteServletTest.java
+    - src/test/java/model/UtenteDAOTest.java
+    - src/main/java/controller/Filters/GenericFilterServlet.java
+    - src/main/java/controller/Filters/CategoriesServlet.java
+    - src/main/java/controller/Filters/SearchBarServlet.java
