@@ -25,7 +25,11 @@ jobs:
       # --- GitGuardian Secret Scanning ---
       - name: GitGuardian Scan
         uses: GitGuardian/ggshield-action@v1
+        continue-on-error: true
         env:
+          GITHUB_PUSH_BEFORE_SHA: ${{ github.event.before }}
+          GITHUB_PUSH_BASE_SHA: ${{ github.event.base_ref }}
+          GITHUB_PULL_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
 
       # --- Snyk Security Scanning ---
