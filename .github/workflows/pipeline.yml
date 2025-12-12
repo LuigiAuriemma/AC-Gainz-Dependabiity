@@ -11,7 +11,6 @@ on:
 env:
   JAVA_VERSION: '21'
   JAVA_DISTRO: 'temurin'
-  SONAR_MAVEN_PLUGIN_VERSION: '3.10.0.2594' # Versione stabile per evitare il crash
 
 jobs:
   # --- JOB 1: SECURITY SCANNING ---
@@ -24,13 +23,10 @@ jobs:
           fetch-depth: 0 # Necessario per scansionare la history dei segreti
 
       # --- GitGuardian Secret Scanning ---
-      # FIX APPLICATO: rimosso 'secret scan' dagli args perché ridondante
       - name: GitGuardian Scan
         uses: GitGuardian/ggshield-action@v1
         env:
           GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
-        with:
-          args: path .
 
       # --- Snyk Security Scanning ---
       - name: Set up JDK ${{ env.JAVA_VERSION }}
@@ -102,13 +98,6 @@ jobs:
           distribution: ${{ env.JAVA_DISTRO }}
           cache: maven
 
-      # Download coverage reports dal job test
-      - name: Download coverage artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-reports
-          path: target/
-
       - name: Cache SonarQube packages
         uses: actions/cache@v4
         with:
@@ -116,15 +105,23 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
-      # FIX APPLICATO: versione esplicita del plugin per evitare errore "Map is null"
+      # Download coverage reports dal job test
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-reports
+          path: target/
+
       - name: SonarQube Scan
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
+          mvn -B sonar:sonar \
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }} \
-            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }} \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.qualitygate.wait=false
 
   # --- JOB 4: BUILD E DEPLOY SU DOCKER HUB ---
   build_and_push_docker:
