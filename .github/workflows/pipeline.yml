@@ -116,6 +116,10 @@ jobs:
           name: coverage-reports
           path: target/
 
+      # Compile classes needed for SonarQube analysis
+      - name: Compile project
+        run: mvn -B compile test-compile
+
       - name: SonarQube Scan
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
