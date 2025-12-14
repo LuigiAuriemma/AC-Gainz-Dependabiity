@@ -12,6 +12,7 @@ import model.ProdottoDAO;
 import model.Utente;
 import model.VarianteDAO;
 import model.UtenteDAO;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,8 +20,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -55,12 +58,28 @@ public class InsertRowServletTest {
     private HttpServletResponse response;
     private RequestDispatcher dispatcher;
 
+    // Capture System.err
+    private final ByteArrayOutputStream errContent = new ByteArrayOutputStream();
+    private final PrintStream originalErr = System.err;
+
+    // Capture System.out
+    private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
+    private final PrintStream originalOut = System.out;
+
     @BeforeEach
     void setup() {
+        System.setErr(new PrintStream(errContent));
+        System.setOut(new PrintStream(outContent));
         servlet = new insertRowServlet();
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         dispatcher = mock(RequestDispatcher.class);
+    }
+
+    @AfterEach
+    void restoreStreams() {
+        System.setErr(originalErr);
+        System.setOut(originalOut);
     }
 
     /**
@@ -116,6 +135,9 @@ public class InsertRowServletTest {
         when(request.getParameter("nameTable")).thenReturn("invalid_table");
         servlet.doPost(request, response);
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
+
+        // KILL MUTANT: Verify System.out log
+        assertTrue(outContent.toString().contains("invalid_table"), "Should log table name to stdout");
     }
 
     // --- Test 2: Verifica Correzione Faglie (Input non validi) ---
@@ -150,11 +172,12 @@ public class InsertRowServletTest {
 
             servlet.doPost(request, response);
 
-            // 'insertVariante' (corretto) cattura NFE, restituisce false.
-            // La servlet invia l'errore "Invalid input data."
             verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
             verify(dispatcher, never()).forward(any(), any());
             assertEquals(0, dao.constructed().size()); // DAO non creato
+
+            // KILL MUTANT: check printStackTrace
+            assertFalse(errContent.toString().isEmpty(), "Should print stack trace to stderr (NumberFormatException)");
         }
     }
 
@@ -198,10 +221,20 @@ public class InsertRowServletTest {
 
             // Verifica che l'oggetto Utente catturato abbia i dati corretti
             Utente savedUser = utenteCaptor.getValue();
+            // KILL MUTANTS: Verify ALL Setters
             assertEquals("Mario", savedUser.getNome());
+            assertEquals("Rossi", savedUser.getCognome()); // Added
+            assertEquals("RSSMRA80A01H501U", savedUser.getCodiceFiscale()); // Added
             assertEquals("user@example.com", savedUser.getEmail());
+            assertEquals("Via Roma 1", savedUser.getIndirizzo()); // Added
+            assertEquals("3331234567", savedUser.getTelefono()); // Added
             // Verifica che la password sia stata hashata (non è più quella in chiaro)
             assertNotEquals("Password1!", savedUser.getPassword());
+            assertNotNull(savedUser.getPassword());
+
+            // Verify date
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            assertEquals(sdf.parse("1980-01-01"), savedUser.getDataNascita());
 
             // Verifica che il forward sia avvenuto
             verify(dispatcher).forward(request, response);
@@ -264,12 +297,24 @@ public class InsertRowServletTest {
                 // 5. Esegui la servlet
                 servlet.doPost(request, response);
 
-                // 6. Verifica (rimane identica)
+                // 6. Verifica
                 filesMock.verify(() -> Files.copy(any(InputStream.class), any(Path.class)));
                 ProdottoDAO mockDao = dao.constructed().get(0);
                 ArgumentCaptor<Prodotto> pCaptor = ArgumentCaptor.forClass(Prodotto.class);
                 verify(mockDao).doSave(pCaptor.capture());
-                assertEquals("Immagini/test-image.jpg", pCaptor.getValue().getImmagine());
+
+                Prodotto p = pCaptor.getValue();
+                // KILL MUTANTS: Verify ALL Setters
+                assertTrue(p.getImmagine().endsWith("test-image.jpg"));
+                assertEquals("P1", p.getIdProdotto());
+                assertEquals("Proteine", p.getNome());
+                assertEquals("Descrizione test", p.getDescrizione());
+                assertEquals("Integratori", p.getCategoria());
+                assertEquals(100, p.getCalorie());
+                assertEquals(10, p.getCarboidrati());
+                assertEquals(80, p.getProteine());
+                assertEquals(5, p.getGrassi());
+
                 verify(dispatcher).forward(request, response);
             }
         }
@@ -318,7 +363,18 @@ public class InsertRowServletTest {
 
             verify(dispatcher).forward(request, response);
             VarianteDAO mockDao = dao.constructed().get(0);
-            verify(mockDao).doSaveVariante(any(Variante.class));
+            ArgumentCaptor<Variante> captor = ArgumentCaptor.forClass(Variante.class);
+            verify(mockDao).doSaveVariante(captor.capture());
+
+            Variante v = captor.getValue();
+            // KILL MUTANTS: Setter verification
+            assertEquals("P1", v.getIdProdotto());
+            assertEquals(1, v.getIdGusto());
+            assertEquals(1, v.getIdConfezione());
+            assertEquals(10.5f, v.getPrezzo());
+            assertEquals(100, v.getQuantita());
+            assertEquals(20, v.getSconto());
+            assertTrue(v.isEvidenza());
         }
     }
 
@@ -342,7 +398,7 @@ public class InsertRowServletTest {
 
     @Test
     @DisplayName("Inserimento 'ordine' (Happy Path)")
-    void doPost_insertOrdine_happyPath() throws ServletException, IOException {
+    void doPost_insertOrdine_happyPath() throws ServletException, IOException, ParseException {
         when(request.getParameter("nameTable")).thenReturn("ordine");
         when(request.getParameter("emailUtente")).thenReturn("user@example.com");
         when(request.getParameter("stato")).thenReturn("Consegnato");
@@ -358,7 +414,15 @@ public class InsertRowServletTest {
 
             verify(dispatcher).forward(request, response);
             OrdineDao mockDao = dao.constructed().get(0);
-            verify(mockDao).doSave(any(Ordine.class));
+            ArgumentCaptor<Ordine> captor = ArgumentCaptor.forClass(Ordine.class);
+            verify(mockDao).doSave(captor.capture());
+
+            Ordine o = captor.getValue();
+            // KILL MUTANTS
+            assertEquals("user@example.com", o.getEmailUtente());
+            assertEquals("Consegnato", o.getStato());
+            assertEquals(50.0f, o.getTotale());
+            assertEquals(new SimpleDateFormat("yyyy-MM-dd").parse("2023-01-01"), o.getDataOrdine());
         }
     }
 
@@ -374,6 +438,9 @@ public class InsertRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+
+        // KILL MUTANT: check printStackTrace
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace to stderr (ParseException)");
     }
 
     // --- Test 8: DettaglioOrdine ---
@@ -396,7 +463,15 @@ public class InsertRowServletTest {
 
             verify(dispatcher).forward(request, response);
             DettaglioOrdineDAO mockDao = dao.constructed().get(0);
-            verify(mockDao).doSave(any(DettaglioOrdine.class));
+            ArgumentCaptor<DettaglioOrdine> captor = ArgumentCaptor.forClass(DettaglioOrdine.class);
+            verify(mockDao).doSave(captor.capture());
+
+            DettaglioOrdine d = captor.getValue();
+            // KILL MUTANTS
+            assertEquals(1, d.getIdOrdine());
+            assertEquals("P1", d.getIdProdotto());
+            assertEquals(1, d.getIdVariante());
+            assertEquals(5, d.getQuantita());
         }
     }
 
@@ -426,6 +501,9 @@ public class InsertRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+
+        // KILL MUTANT: check printStackTrace
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace to stderr");
     }
 
     // --- Test 9: Gusto ---
@@ -445,7 +523,9 @@ public class InsertRowServletTest {
 
             verify(dispatcher).forward(request, response);
             GustoDAO mockDao = dao.constructed().get(0);
-            verify(mockDao).doSaveGusto(any(Gusto.class));
+            ArgumentCaptor<Gusto> captor = ArgumentCaptor.forClass(Gusto.class);
+            verify(mockDao).doSaveGusto(captor.capture());
+            assertEquals("Cioccolato", captor.getValue().getNomeGusto());
         }
     }
 
@@ -477,7 +557,9 @@ public class InsertRowServletTest {
 
             verify(dispatcher).forward(request, response);
             ConfezioneDAO mockDao = dao.constructed().get(0);
-            verify(mockDao).doSaveConfezione(any(Confezione.class));
+            ArgumentCaptor<Confezione> captor = ArgumentCaptor.forClass(Confezione.class);
+            verify(mockDao).doSaveConfezione(captor.capture());
+            assertEquals(500, captor.getValue().getPeso());
         }
     }
 
@@ -501,6 +583,9 @@ public class InsertRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+
+        // KILL MUTANT: check printStackTrace
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace to stderr");
     }
 
     // --- Test 11: Utente ParseException ---
@@ -515,12 +600,15 @@ public class InsertRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+
+        // KILL MUTANT: check printStackTrace
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace to stderr");
     }
 
     // --- Test 12: Prodotto File Collision & Edge Cases ---
 
     @Test
-    @DisplayName("Inserimento 'prodotto' (File Collision) -> Rinomina file")
+    @DisplayName("Inserimento 'prodotto' (File Collision) -> Rinomina file loop")
     void doPost_insertProdotto_fileCollision() throws ServletException, IOException {
         setupValidProdottoParams();
         when(request.getParameter("nameTable")).thenReturn("prodotto");
@@ -544,7 +632,7 @@ public class InsertRowServletTest {
             // Mock collision: first exists, second doesn't
             when(servletContext.getRealPath(anyString())).thenReturn("/fake/path");
             filesMock.when(() -> Files.exists(any(Path.class)))
-                    .thenReturn(true) // First check: exists (collision)
+                    .thenReturn(true) // First check: exists (collision 1)
                     .thenReturn(false); // Second check: free
 
             when(mockPath.getParent()).thenReturn(mockParentPath);
@@ -559,6 +647,58 @@ public class InsertRowServletTest {
                 verify(dispatcher).forward(request, response);
                 // Verify that the loop ran (Files.exists called at least twice)
                 filesMock.verify(() -> Files.exists(any(Path.class)), atLeast(2));
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Inserimento 'prodotto' (Double File Collision) -> Kill IncrementsMutator")
+    void doPost_insertProdotto_doubleFileCollision() throws ServletException, IOException {
+        setupValidProdottoParams();
+        when(request.getParameter("nameTable")).thenReturn("prodotto");
+        when(request.getRequestDispatcher("showTable?tableName=prodotto")).thenReturn(dispatcher);
+
+        ServletContext servletContext = mock(ServletContext.class);
+        ServletConfig servletConfig = mock(ServletConfig.class);
+        when(servletConfig.getServletContext()).thenReturn(servletContext);
+        servlet.init(servletConfig);
+
+        try (MockedStatic<Paths> pathsMock = mockStatic(Paths.class);
+                MockedStatic<Files> filesMock = mockStatic(Files.class)) {
+
+            Path mockPath = mock(Path.class);
+            Path mockParentPath = mock(Path.class);
+
+            pathsMock.when(() -> Paths.get(anyString())).thenReturn(mockPath);
+            when(mockPath.getFileName()).thenReturn(mockPath);
+            when(mockPath.toString()).thenReturn("test-image.jpg");
+
+            // Mock collision: exists, exists, then free (loop runs 3 times: 2, 3, 4?)
+            when(servletContext.getRealPath(anyString())).thenReturn("/fake/path");
+            filesMock.when(() -> Files.exists(any(Path.class)))
+                    .thenReturn(true) // 1st check exists
+                    .thenReturn(true) // 2nd check exists (requires i++ to advance)
+                    .thenReturn(false); // 3rd check free
+
+            when(mockPath.getParent()).thenReturn(mockParentPath);
+            filesMock.when(() -> Files.createDirectories(any(Path.class))).thenReturn(mockParentPath);
+            filesMock.when(() -> Files.copy(any(InputStream.class), any(Path.class))).thenReturn(0L);
+
+            try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                doNothing().when(mock).doSave(any(Prodotto.class));
+            })) {
+                servlet.doPost(request, response);
+
+                verify(dispatcher).forward(request, response);
+                // Verify Files.exists called at least 3 times
+                filesMock.verify(() -> Files.exists(any(Path.class)), atLeast(3));
+
+                // Assert Filename to kill IncrementsMutator
+                ProdottoDAO mockDao = dao.constructed().get(0);
+                ArgumentCaptor<Prodotto> captor = ArgumentCaptor.forClass(Prodotto.class);
+                verify(mockDao).doSave(captor.capture());
+                assertTrue(captor.getValue().getImmagine().contains("3_test-image.jpg"),
+                        "Should increment index to 3_test-image.jpg, but was: " + captor.getValue().getImmagine());
             }
         }
     }
@@ -735,6 +875,9 @@ public class InsertRowServletTest {
         }
 
         verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+
+        // KILL MUTANT: check printStackTrace
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace to stderr");
     }
 
     // --- Test 17: Ordine Extra Branches (New Coverage) ---
@@ -750,6 +893,31 @@ public class InsertRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+
+        // KILL MUTANT: check printStackTrace
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace to stderr");
+    }
+
+    @Test
+    @DisplayName("Inserimento 'ordine' (Happy Path: Totale Zero) -> Kill Boundary Mutant (try)")
+    void doPost_insertOrdine_totaleZero_happyPath() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("ordine");
+        when(request.getParameter("emailUtente")).thenReturn("user@example.com");
+        when(request.getParameter("stato")).thenReturn("Consegnato");
+        when(request.getParameter("totale")).thenReturn("0"); // Boundary: 0
+        when(request.getParameter("data")).thenReturn("2023-01-01");
+
+        when(request.getRequestDispatcher("showTable?tableName=ordine")).thenReturn(dispatcher);
+
+        try (MockedConstruction<OrdineDao> dao = mockConstruction(OrdineDao.class)) {
+            servlet.doPost(request, response);
+            verify(dispatcher).forward(request, response);
+
+            OrdineDao mockDao = dao.constructed().get(0);
+            ArgumentCaptor<Ordine> captor = ArgumentCaptor.forClass(Ordine.class);
+            verify(mockDao).doSave(captor.capture());
+            assertEquals(0.0f, captor.getValue().getTotale());
+        }
     }
 
     // --- Test 18: Variante Extra Branches (New Coverage) ---
@@ -764,6 +932,78 @@ public class InsertRowServletTest {
         when(request.getParameter("prezzo")).thenReturn("10.5");
         when(request.getParameter("quantity")).thenReturn("100");
         when(request.getParameter("sconto")).thenReturn("101"); // Invalid discount
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    @Test
+    @DisplayName("Inserimento 'variante' (Happy Path: Discount Zero) -> Kill Boundary Mutant")
+    void doPost_insertVariante_discountZero_happyPath() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("variante");
+        when(request.getParameter("idProdottoVariante")).thenReturn("P1");
+        when(request.getParameter("idGusto")).thenReturn("1");
+        when(request.getParameter("idConfezione")).thenReturn("1");
+        when(request.getParameter("prezzo")).thenReturn("10.5");
+        when(request.getParameter("quantity")).thenReturn("100");
+        when(request.getParameter("sconto")).thenReturn("0"); // Boundary: 0
+
+        when(request.getRequestDispatcher("showTable?tableName=variante")).thenReturn(dispatcher);
+
+        try (MockedConstruction<VarianteDAO> dao = mockConstruction(VarianteDAO.class)) {
+            servlet.doPost(request, response);
+            verify(dispatcher).forward(request, response);
+        }
+    }
+
+    @Test
+    @DisplayName("Inserimento 'variante' (Happy Path: Discount 100) -> Kill Boundary Mutant")
+    void doPost_insertVariante_discountHundred_happyPath() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("variante");
+        when(request.getParameter("idProdottoVariante")).thenReturn("P1");
+        when(request.getParameter("idGusto")).thenReturn("1");
+        when(request.getParameter("idConfezione")).thenReturn("1");
+        when(request.getParameter("prezzo")).thenReturn("10.5");
+        when(request.getParameter("quantity")).thenReturn("100");
+        when(request.getParameter("sconto")).thenReturn("100"); // Boundary: 100
+
+        when(request.getRequestDispatcher("showTable?tableName=variante")).thenReturn(dispatcher);
+
+        try (MockedConstruction<VarianteDAO> dao = mockConstruction(VarianteDAO.class)) {
+            servlet.doPost(request, response);
+            verify(dispatcher).forward(request, response);
+        }
+    }
+
+    // --- NEW Test 19: Kill Survived Mutants (Boundary Checks) ---
+
+    @Test
+    @DisplayName("Inserimento 'variante' (Sad Path: Price Zero) -> Kill Boundary Mutant")
+    void doPost_insertVariante_priceZero_sendsError() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("variante");
+        when(request.getParameter("idProdottoVariante")).thenReturn("P1");
+        when(request.getParameter("idGusto")).thenReturn("1");
+        when(request.getParameter("idConfezione")).thenReturn("1");
+        when(request.getParameter("prezzo")).thenReturn("0"); // Boundary: 0 should be invalid (<= 0)
+        when(request.getParameter("quantity")).thenReturn("10");
+        when(request.getParameter("sconto")).thenReturn("0");
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Invalid input data.");
+    }
+
+    @Test
+    @DisplayName("Inserimento 'variante' (Sad Path: Quantity Zero) -> Kill Boundary Mutant")
+    void doPost_insertVariante_quantityZero_sendsError() throws ServletException, IOException {
+        when(request.getParameter("nameTable")).thenReturn("variante");
+        when(request.getParameter("idProdottoVariante")).thenReturn("P1");
+        when(request.getParameter("idGusto")).thenReturn("1");
+        when(request.getParameter("idConfezione")).thenReturn("1");
+        when(request.getParameter("prezzo")).thenReturn("10");
+        when(request.getParameter("quantity")).thenReturn("0"); // Boundary: 0 should be invalid (<= 0)
+        when(request.getParameter("sconto")).thenReturn("0");
 
         servlet.doPost(request, response);
 

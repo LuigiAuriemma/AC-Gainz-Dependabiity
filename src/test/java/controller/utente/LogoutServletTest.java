@@ -1,6 +1,8 @@
 package controller.utente;
 
 import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -8,6 +10,7 @@ import jakarta.servlet.http.HttpSession;
 import model.Carrello;
 import model.CarrelloDAO;
 import model.Utente;
+import model.UtenteDAO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Tests per LogoutServlet (basati esattamente sul codice fornito).
+ * Tests per LogoutServlet (Updated to kill mutants)
  */
 public class LogoutServletTest {
 
@@ -31,14 +34,22 @@ public class LogoutServletTest {
     private HttpServletResponse response;
     private HttpSession session;
     private RequestDispatcher dispatcher;
+    private ServletContext context;
 
     @BeforeEach
-    void setup() {
+    void setup() throws ServletException {
         servlet = new LogoutServlet();
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         session = mock(HttpSession.class);
         dispatcher = mock(RequestDispatcher.class);
+
+        // Mock config & context for log() verification
+        ServletConfig config = mock(ServletConfig.class);
+        context = mock(ServletContext.class);
+        when(config.getServletContext()).thenReturn(context);
+        when(config.getServletName()).thenReturn("LogoutServlet");
+        servlet.init(config);
 
         // Default stubs
         when(request.getSession()).thenReturn(session);
@@ -47,16 +58,20 @@ public class LogoutServletTest {
     }
 
     @Test
-    @DisplayName("Se non c'è utente in sessione la servlet non fa nulla")
-    void noUser_doesNothing() throws ServletException, IOException {
+    @DisplayName("Se non c'è utente in sessione -> redirect a index.jsp")
+    void noUser_redirectsToIndex() throws ServletException, IOException {
         when(session.getAttribute("Utente")).thenReturn(null);
 
         servlet.doGet(request, response);
 
-        // Non deve invalidare la sessione né fare forward né usare il DAO
+        // Il codice dice: if (x != null) { ... } else { resp.sendRedirect("index.jsp");
+        // }
+        verify(response).sendRedirect("index.jsp");
+
+        // Verifica che NON vengano fatte operazioni di logout/forward
         verify(session, never()).invalidate();
         verify(session, never()).removeAttribute(anyString());
-        verify(request, never()).getRequestDispatcher("index.jsp");
+        verify(request, never()).getRequestDispatcher(anyString());
         verify(dispatcher, never()).forward(request, response);
     }
 
@@ -78,7 +93,8 @@ public class LogoutServletTest {
         })) {
             servlet.doGet(request, response);
 
-            // Il DAO costruito deve aver ricevuto la chiamata per rimuovere il carrello dell'utente
+            // Il DAO costruito deve aver ricevuto la chiamata per rimuovere il carrello
+            // dell'utente
             CarrelloDAO constructedDao = mocked.constructed().get(0);
             verify(constructedDao).doRemoveCartByUser("user@example.com");
 
@@ -146,17 +162,53 @@ public class LogoutServletTest {
     }
 
     @Test
-    @DisplayName("doPost deve chiamare doGet")
+    @DisplayName("doPost deve chiamare doGet e gestire eccezioni")
     void doPost_callsDoGet() throws ServletException, IOException {
-        // Creiamo uno "spy" della servlet.
-        // È un oggetto LogoutServlet reale, ma possiamo verificare le chiamate ai suoi metodi.
+        // Spy servlet to verify delegation
         LogoutServlet spyServlet = spy(new LogoutServlet());
+        // Init spy shim
+        ServletConfig config = mock(ServletConfig.class);
+        when(config.getServletContext()).thenReturn(context);
+        when(config.getServletName()).thenReturn("LogoutServlet");
+        spyServlet.init(config);
 
-        // Chiamiamo doPost
         spyServlet.doPost(request, response);
 
-        // Verifichiamo che lo spy abbia chiamato il suo stesso metodo doGet
-        // Dobbiamo usare "verify(spyServlet)" e non "verify(servlet)"
         verify(spyServlet).doGet(request, response);
+    }
+
+    @Test
+    @DisplayName("Eccezione in doGet -> logga errore e invia 500")
+    void doGet_exception_sendsError500() throws ServletException, IOException {
+        // Simuliamo eccezione nel recupero sessione o altro
+        when(request.getSession()).thenThrow(new RuntimeException("Session Error"));
+
+        servlet.doGet(request, response);
+
+        // Verifica invio errore
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante il logout.");
+        // Verifica log
+        verify(context).log(eq("LogoutServlet: Errore in LogoutServlet doGet"), any(Exception.class));
+    }
+
+    @Test
+    @DisplayName("Eccezione in doPost -> logga errore e invia 500")
+    void doPost_exception_sendsError500() throws ServletException, IOException {
+        LogoutServlet spyServlet = spy(new LogoutServlet());
+        // Init spy shim
+        ServletConfig config = mock(ServletConfig.class);
+        when(config.getServletContext()).thenReturn(context);
+        when(config.getServletName()).thenReturn("LogoutServlet");
+        spyServlet.init(config);
+
+        // Forza doGet a lanciare IOException (controllata) o ServletException
+        doThrow(new IOException("IO Error")).when(spyServlet).doGet(request, response);
+
+        spyServlet.doPost(request, response);
+
+        // Verifica invio errore
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+        // Verifica log
+        verify(context).log(eq("LogoutServlet: Errore in LogoutServlet doPost"), any(Exception.class));
     }
 }

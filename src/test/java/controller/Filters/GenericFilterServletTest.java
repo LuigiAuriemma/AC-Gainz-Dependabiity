@@ -32,8 +32,8 @@ import static org.mockito.Mockito.*;
 
 /**
  * Classe di test per GenericFilterServlet.
- * Testa le due modalità (nameForm/JSP e Filtro/JSON)
- * e verifica che il codice corretto gestisca prodotti senza varianti.
+ * Testa le due modalità (nameForm/JSP e Filtro/JSON),
+ * la sanitizzazione degli input, e la gestione eccezioni.
  */
 public class GenericFilterServletTest {
 
@@ -42,31 +42,34 @@ public class GenericFilterServletTest {
     private HttpServletResponse response;
     private HttpSession session;
     private RequestDispatcher dispatcher;
+    private ServletContext servletContext;
 
-    // Per catturare l'output JSON
+    // Per catturare l'output JSON e verificare flush
     private StringWriter stringWriter;
     private PrintWriter printWriter;
 
     @BeforeEach
     void setup() throws Exception {
-        servlet = new GenericFilterServlet();
-        
+        servlet = spy(new GenericFilterServlet());
+
         // Mock ServletConfig e ServletContext per permettere il logging
         ServletConfig servletConfig = mock(ServletConfig.class);
-        ServletContext servletContext = mock(ServletContext.class);
+        servletContext = mock(ServletContext.class);
         when(servletConfig.getServletContext()).thenReturn(servletContext);
-        
+        when(servletConfig.getServletName()).thenReturn("GenericFilterServlet");
+
         // Inizializza il servlet con il config mockato
         servlet.init(servletConfig);
-        
+
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         session = mock(HttpSession.class);
         dispatcher = mock(RequestDispatcher.class);
 
         // Prepariamo un writer in memoria per catturare l'output JSON
+        // USIAMO SPY per verificare flush()
         stringWriter = new StringWriter();
-        printWriter = new PrintWriter(stringWriter);
+        printWriter = spy(new PrintWriter(stringWriter));
 
         // Stub di base
         when(request.getSession()).thenReturn(session);
@@ -87,13 +90,37 @@ public class GenericFilterServletTest {
     @Test
     @DisplayName("doPost deve delegare a doGet")
     void doPost_delegatesToDoGet() throws ServletException, IOException {
-        GenericFilterServlet spyServlet = spy(new GenericFilterServlet());
         // Disattiviamo il doGet reale per testare solo la delega
-        doNothing().when(spyServlet).doGet(any(HttpServletRequest.class), any(HttpServletResponse.class));
+        doNothing().when(servlet).doGet(any(HttpServletRequest.class), any(HttpServletResponse.class));
 
-        spyServlet.doPost(request, response);
+        servlet.doPost(request, response);
 
-        verify(spyServlet).doGet(request, response);
+        verify(servlet).doGet(request, response);
+    }
+
+    @Test
+    @DisplayName("doPost exceptions are caught and logged")
+    void doPost_exception_sendsError500() throws ServletException, IOException {
+        // Force doGet failure
+        doThrow(new ServletException("Crash doGet")).when(servlet).doGet(any(), any());
+
+        servlet.doPost(request, response);
+
+        verify(servletContext).log(eq("GenericFilterServlet: Errore in GenericFilterServlet doPost"),
+                any(Exception.class));
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+    }
+
+    @Test
+    @DisplayName("doPost exceptions with already committed response -> No error 500")
+    void doPost_exception_committed_doesNotSendError() throws ServletException, IOException {
+        when(response.isCommitted()).thenReturn(true);
+        doThrow(new ServletException("Crash doGet")).when(servlet).doGet(any(), any());
+
+        servlet.doPost(request, response);
+
+        verify(servletContext).log(anyString(), any(Exception.class));
+        verify(response, never()).sendError(anyInt(), anyString());
     }
 
     // --- Test 2: Test del metodo helper getJsonObject ---
@@ -108,9 +135,9 @@ public class GenericFilterServletTest {
             Prodotto p = new Prodotto();
             Variante v = new Variante();
             v.setIdVariante(101);
-            v.setSconto(20); // Set discount to match assertion
+            v.setSconto(20);
             p.setNome("Proteine");
-            p.setVarianti(List.of(v)); // Ha una variante
+            p.setVarianti(List.of(v));
 
             JSONObject json = GenericFilterServlet.getJsonObject(p);
 
@@ -122,8 +149,6 @@ public class GenericFilterServletTest {
         @Test
         @DisplayName("Prodotto con Varianti null (Mocked) -> Restituisce null")
         void getJsonObject_mockedNullVariants_returnsNull() {
-            // Poiché Prodotto.getVarianti() inizializza la lista se null,
-            // dobbiamo usare un mock per forzare il ritorno di null.
             Prodotto p = mock(Prodotto.class);
             when(p.getVarianti()).thenReturn(null);
 
@@ -136,7 +161,7 @@ public class GenericFilterServletTest {
         @DisplayName("Verifica tutti i campi del JSON")
         void getJsonObject_verifyAllFields() {
             Prodotto p = new Prodotto();
-            p.setIdProdotto("1"); // Fixed: String instead of int
+            p.setIdProdotto("1");
             p.setNome("Prodotto Test");
             p.setCategoria("Integratori");
             p.setCalorie(100);
@@ -146,7 +171,7 @@ public class GenericFilterServletTest {
             v.setIdVariante(10);
             v.setPrezzo(50.0f);
             v.setGusto("Vaniglia");
-            v.setPesoConfezione(1000); // Fixed: int instead of String (assuming 1000g for 1kg)
+            v.setPesoConfezione(1000);
             v.setSconto(0);
 
             p.setVarianti(List.of(v));
@@ -154,7 +179,7 @@ public class GenericFilterServletTest {
             JSONObject json = GenericFilterServlet.getJsonObject(p);
 
             assertNotNull(json);
-            assertEquals("1", json.get("id")); // Fixed: String
+            assertEquals("1", json.get("id"));
             assertEquals("Prodotto Test", json.get("nome"));
             assertEquals("Integratori", json.get("categoria"));
             assertEquals(100, json.get("calorie"));
@@ -162,8 +187,8 @@ public class GenericFilterServletTest {
             assertEquals(10, json.get("idVariante"));
             assertEquals(50.0f, json.get("prezzo"));
             assertEquals("Vaniglia", json.get("gusto"));
-            assertEquals(1000, json.get("peso")); // Fixed: int
-            assertNull(json.get("sconto")); // Sconto 0 non viene aggiunto
+            assertEquals(1000, json.get("peso"));
+            assertNull(json.get("sconto"));
         }
 
         @Test
@@ -171,9 +196,8 @@ public class GenericFilterServletTest {
         void getJsonObject_noVariant_returnsNull() {
             Prodotto p = new Prodotto();
             p.setNome("Prodotto Fallato");
-            p.setVarianti(new ArrayList<>()); // Lista varianti vuota
+            p.setVarianti(new ArrayList<>());
 
-            // Questo è il NUOVO test: verifica che il metodo restituisca null
             JSONObject json = GenericFilterServlet.getJsonObject(p);
 
             assertNull(json);
@@ -187,7 +211,7 @@ public class GenericFilterServletTest {
     class NameFormTests {
 
         @Test
-        @DisplayName("nameForm con valore -> Chiama filterProducts e fa forward")
+        @DisplayName("nameForm con valore -> Chiama filterProducts e gestisce attributi sessione")
         void nameForm_withValue_forwardsToJSP() throws ServletException, IOException, SQLException {
             when(request.getParameter("nameForm")).thenReturn("Proteine");
             List<Prodotto> listA = List.of(new Prodotto());
@@ -198,24 +222,45 @@ public class GenericFilterServletTest {
 
                 servlet.doGet(request, response);
 
-                // Verifica chiamata DAO
                 verify(dao.constructed().get(0)).filterProducts("", "", "", "", "Proteine");
-                verify(dao.constructed().get(0), never()).doRetrieveAll();
 
-                // Verifica attributi
+                // VERIFICA MUTANTE: setAttribute filteredProducts
                 verify(request).setAttribute("originalProducts", listA);
                 verify(session).setAttribute("searchBarName", "Proteine");
+                verify(session).setAttribute("filteredProducts", listA);
 
-                // Verifica forward (e non JSON)
                 verify(dispatcher).forward(request, response);
                 assertTrue(getJsonOutput().isEmpty());
             }
         }
 
         @Test
+        @DisplayName("nameForm INPUT INVALIDO -> Sanitizzato e non cerca nel DB")
+        void nameForm_invalidInput_isSanitized() throws ServletException, IOException, SQLException {
+            // "Droga!!!" contiene '!' che non è nel pattern SAFE_TEXT_PATTERN
+            // (a-zA-Z0-9\s\-%]+)
+            when(request.getParameter("nameForm")).thenReturn("Droga!!!");
+
+            // Se sanitizzato -> diventa ""
+
+            List<Prodotto> listB = new ArrayList<>();
+
+            try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                when(mock.doRetrieveAll()).thenReturn(listB);
+            })) {
+
+                servlet.doGet(request, response);
+
+                // Deve comportarsi come se il nome fosse vuoto -> doRetrieveAll
+                verify(dao.constructed().get(0)).doRetrieveAll();
+                verify(dao.constructed().get(0), never()).filterProducts(any(), any(), any(), any(), any());
+            }
+        }
+
+        @Test
         @DisplayName("nameForm vuoto -> Chiama doRetrieveAll e fa forward")
         void nameForm_blank_callsDoRetrieveAll() throws ServletException, IOException, SQLException {
-            when(request.getParameter("nameForm")).thenReturn(""); // Blank
+            when(request.getParameter("nameForm")).thenReturn("");
             List<Prodotto> listB = List.of(new Prodotto());
 
             try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
@@ -224,31 +269,25 @@ public class GenericFilterServletTest {
 
                 servlet.doGet(request, response);
 
-                // Verifica chiamata DAO
                 verify(dao.constructed().get(0)).doRetrieveAll();
-                verify(dao.constructed().get(0), never()).filterProducts(any(), any(), any(), any(), any());
-
-                // Verifica pulizia sessione
                 verify(session).removeAttribute("categoria");
-
-                // Verifica forward
                 verify(dispatcher).forward(request, response);
             }
         }
 
         @Test
-        @DisplayName("nameForm lancia SQLException -> Invia errore 500")
+        @DisplayName("nameForm lancia SQLException -> Logga e Invia errore 500")
         void nameForm_sqlException_sendsError() throws Exception {
             when(request.getParameter("nameForm")).thenReturn("Proteine");
 
             try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                // Simula il crash del DAO
                 when(mock.filterProducts(any(), any(), any(), any(), any())).thenThrow(new SQLException("DB Error"));
             })) {
 
                 servlet.doGet(request, response);
 
-                // Verifica che la servlet catturi l'eccezione e invii un errore 500
+                // VERIFICA MUTANTE: log chiamato
+                verify(servletContext).log(eq("GenericFilterServlet: Errore in handleNameForm"), any(Exception.class));
                 verify(response).sendError(eq(HttpServletResponse.SC_INTERNAL_SERVER_ERROR), anyString());
             }
         }
@@ -261,55 +300,72 @@ public class GenericFilterServletTest {
     class AjaxFilterTests {
 
         @Test
-        @DisplayName("(CORRETTO) Filtro AJAX ignora prodotti senza varianti")
+        @DisplayName("Filtro AJAX ignora prodotti senza varianti e imposta ContentType/Flush")
         void ajaxFilter_skipsNullVariantProducts() throws ServletException, IOException, SQLException {
-            when(request.getParameter("nameForm")).thenReturn(null); // Attiva modalità AJAX
+            when(request.getParameter("nameForm")).thenReturn(null);
 
-            // 1. Prepara i dati (un prodotto OK, uno fallato)
             Prodotto pBuono = new Prodotto();
             pBuono.setNome("Prodotto Buono");
-            pBuono.setVarianti(List.of(new Variante())); // Ha varianti
+            pBuono.setVarianti(List.of(new Variante()));
 
             Prodotto pFallato = new Prodotto();
             pFallato.setNome("Prodotto Fallato");
-            pFallato.setVarianti(new ArrayList<>()); // NON ha varianti
+            pFallato.setVarianti(new ArrayList<>());
 
             List<Prodotto> listFromDB = List.of(pBuono, pFallato);
 
             try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                // Il DAO restituisce entrambi i prodotti
                 when(mock.filterProducts(any(), any(), any(), any(), any())).thenReturn(listFromDB);
             })) {
 
                 servlet.doGet(request, response);
 
-                // Verifica che non ci sia stato forward
                 verify(dispatcher, never()).forward(request, response);
 
-                // Verifica l'output JSON
-                String json = getJsonOutput();
+                // VERIFICA MUTANTE: setContentType + flush
+                verify(response).setContentType("application/json");
+                verify(printWriter).flush();
 
-                // VERIFICA CHIAVE:
-                // Il JSON deve contenere il prodotto buono
+                String json = getJsonOutput();
                 assertTrue(json.contains("\"nome\":\"Prodotto Buono\""));
-                // Il JSON NON deve contenere il prodotto fallato (perché è stato skippato)
                 assertFalse(json.contains("\"nome\":\"Prodotto Fallato\""));
             }
         }
 
         @Test
-        @DisplayName("Filtro AJAX lancia SQLException -> Invia errore 500")
-        void ajaxFilter_sqlException_sendsError() throws Exception {
-            when(request.getParameter("nameForm")).thenReturn(null); // Attiva modalità AJAX
+        @DisplayName("getWriter throws IOException -> Logs and Sends Error 500")
+        void ajaxFilter_ioException_sendsError() throws Exception {
+            when(request.getParameter("nameForm")).thenReturn(null);
+
+            // Stub Exception on getWriter
+            when(response.getWriter()).thenThrow(new IOException("Output blocked"));
 
             try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                // Simula il crash del DAO
+                when(mock.filterProducts(any(), any(), any(), any(), any())).thenReturn(new ArrayList<>());
+            })) {
+
+                servlet.doGet(request, response);
+
+                // Verify Log called for sendJsonResponse error
+                verify(servletContext).log(eq("GenericFilterServlet: Errore in sendJsonResponse"),
+                        any(Exception.class));
+                verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+                        "Errore durante l'invio della risposta JSON.");
+            }
+        }
+
+        @Test
+        @DisplayName("Filtro AJAX lancia SQLException -> Logga e Invia errore 500")
+        void ajaxFilter_sqlException_sendsError() throws Exception {
+            when(request.getParameter("nameForm")).thenReturn(null);
+
+            try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
                 when(mock.filterProducts(any(), any(), any(), any(), any())).thenThrow(new SQLException("DB Error"));
             })) {
 
                 servlet.doGet(request, response);
 
-                // Verifica che la servlet catturi l'eccezione e invii un errore 500
+                verify(servletContext).log(eq("GenericFilterServlet: Errore in filterProducts"), any(Exception.class));
                 verify(response).sendError(eq(HttpServletResponse.SC_INTERNAL_SERVER_ERROR), anyString());
             }
         }
@@ -319,15 +375,11 @@ public class GenericFilterServletTest {
         void ajaxFilter_usesSessionAndRequestParameters() throws ServletException, IOException, SQLException {
             when(request.getParameter("nameForm")).thenReturn(null);
 
-            // Session attributes
             when(session.getAttribute("categoria")).thenReturn("Integratori");
             when(session.getAttribute("searchBarName")).thenReturn("Whey");
 
-            // Request parameters
             when(request.getParameter("weight")).thenReturn("1kg");
             when(request.getParameter("taste")).thenReturn("Cioccolato");
-
-            // CORREZIONE: Uso "PriceAsc" (come nella tua lista) invece di "price_asc"
             when(request.getParameter("sorting")).thenReturn("PriceAsc");
 
             List<Prodotto> emptyList = new ArrayList<>();
@@ -339,17 +391,49 @@ public class GenericFilterServletTest {
 
                 servlet.doGet(request, response);
 
-                // Verifica che i parametri siano passati correttamente al DAO
                 verify(dao.constructed().get(0)).filterProducts(
                         eq("Integratori"),
-                        eq("PriceAsc"), // <-- Deve corrispondere esattamente a quello sopra
+                        eq("PriceAsc"),
                         eq("1kg"),
                         eq("Cioccolato"),
-                        eq("Whey")
-                );
+                        eq("Whey"));
 
-                // Verifica aggiornamento sessione
                 verify(session).setAttribute("filteredProducts", emptyList);
+            }
+        }
+
+        @Test
+        @DisplayName("Filtro AJAX con parametri vuoti -> Passati come stringhe vuote (Kill Mutant isValidInput)")
+        void ajaxFilter_emptyParams_passedAsEmptyString() throws ServletException, IOException, SQLException {
+            // Setup: nameForm=null (AJAX mode)
+            when(request.getParameter("nameForm")).thenReturn(null);
+
+            // Parametri vuoti (ma non null)
+            when(request.getParameter("weight")).thenReturn("");
+            when(request.getParameter("taste")).thenReturn("");
+
+            // Session default
+            when(session.getAttribute("categoria")).thenReturn(null);
+            when(session.getAttribute("searchBarName")).thenReturn(null);
+
+            try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                when(mock.filterProducts(any(), any(), any(), any(), any())).thenReturn(new ArrayList<>());
+            })) {
+
+                servlet.doGet(request, response);
+
+                // VERIFICA: Il DAO deve ricevere "" e "" (stringhe vuote), NON null.
+                // Se il mutante "return true -> return false" in isValidInput è attivo,
+                // isValidInput("") ritornerebbe false, causando la logica ternaria
+                // (? rawWeight : null) a restituire null.
+
+                verify(dao.constructed().get(0)).filterProducts(
+                        isNull(), // category
+                        eq("default"), // sorting
+                        eq(""), // weight
+                        eq(""), // taste
+                        eq("") // nameFilter (default "")
+                );
             }
         }
     }

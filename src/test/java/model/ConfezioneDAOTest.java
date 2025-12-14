@@ -46,6 +46,8 @@ class ConfezioneDAOTest {
             assertNotNull(result);
             assertEquals(validId, result.getIdConfezione());
             assertEquals(500, result.getPeso());
+
+            verify(mockPreparedStatement).setInt(1, validId);
         }
     }
 
@@ -110,10 +112,15 @@ class ConfezioneDAOTest {
             // Simuliamo 2 risultati
             when(mockResultSet.next()).thenReturn(true, true, false);
             when(mockResultSet.getInt("id_confezione")).thenReturn(1, 2);
+            when(mockResultSet.getInt("peso")).thenReturn(100, 200);
 
             List<Confezione> list = dao.doRetrieveAll();
 
             assertEquals(2, list.size());
+            assertEquals(1, list.get(0).getIdConfezione());
+            assertEquals(100, list.get(0).getPeso());
+            assertEquals(2, list.get(1).getIdConfezione());
+            assertEquals(200, list.get(1).getPeso());
         }
     }
 

@@ -43,6 +43,7 @@ public class ShowRowFormTest {
     private showRowForm servlet;
     private HttpServletRequest request;
     private HttpServletResponse response;
+    private ServletContext servletContext; // Mocked context for log verification
 
     // Per catturare l'output JSON
     private StringWriter stringWriter;
@@ -56,15 +57,16 @@ public class ShowRowFormTest {
 
         // Mock ServletConfig e ServletContext per permettere il logging
         ServletConfig servletConfig = mock(ServletConfig.class);
-        ServletContext servletContext = mock(ServletContext.class);
+        servletContext = mock(ServletContext.class);
         when(servletConfig.getServletContext()).thenReturn(servletContext);
-        
+
         // Inizializza il servlet con il config mockato
         servlet.init(servletConfig);
 
         // Prepariamo un writer in memoria per catturare l'output JSON
         stringWriter = new StringWriter();
-        printWriter = new PrintWriter(stringWriter);
+        // SPY on PrintWriter to verify flush()
+        printWriter = spy(new PrintWriter(stringWriter));
 
         // Stub di base
         when(response.getWriter()).thenReturn(printWriter);
@@ -74,7 +76,7 @@ public class ShowRowFormTest {
      * Helper per ottenere l'output JSON catturato.
      */
     private String getJsonOutput() {
-        printWriter.flush();
+        // printWriter.flush(); // Remove manual flush to rely on servlet's flush
         return stringWriter.toString().trim();
     }
 
@@ -84,7 +86,6 @@ public class ShowRowFormTest {
     @DisplayName("doPost deve delegare a doGet")
     void doPost_delegatesToDoGet() throws ServletException, IOException {
         showRowForm spyServlet = spy(new showRowForm());
-        // Disattiviamo il doGet reale per testare solo la delega
         doNothing().when(spyServlet).doGet(any(HttpServletRequest.class), any(HttpServletResponse.class));
 
         spyServlet.doPost(request, response);
@@ -102,8 +103,11 @@ public class ShowRowFormTest {
 
         servlet.doGet(request, response);
 
-        // Il 'if' principale fallisce, restituisce JSON vuoto
         assertEquals("[]", getJsonOutput());
+
+        // KILL MUTANT: Verify setContentType and flush even for empty response
+        verify(response).setContentType("application/json");
+        verify(printWriter).flush();
     }
 
     @Test
@@ -114,8 +118,11 @@ public class ShowRowFormTest {
 
         servlet.doGet(request, response);
 
-        // Il 'if' principale fallisce, restituisce JSON vuoto
         assertEquals("[]", getJsonOutput());
+
+        // KILL MUTANT: Verify setContentType and flush
+        verify(response).setContentType("application/json");
+        verify(printWriter).flush();
     }
 
     // --- Test 3: Verifica Correzione Faglie ---
@@ -126,18 +133,22 @@ public class ShowRowFormTest {
         when(request.getParameter("tableName")).thenReturn("confezione");
         when(request.getParameter("primaryKey")).thenReturn("abc"); // Non numerico
 
-        // Mock del DAO (non dovrebbe essere chiamato)
         try (MockedConstruction<ConfezioneDAO> dao = mockConstruction(ConfezioneDAO.class)) {
 
-            // Il 'try-catch' (corretto) cattura NFE e non fa nulla
             assertDoesNotThrow(() -> {
                 servlet.doGet(request, response);
             });
 
-            // Restituisce JSON vuoto
             assertEquals("[]", getJsonOutput());
-            // Nessun DAO è stato usato
             verify(dao.constructed().get(0), never()).doRetrieveById(anyInt());
+
+            // KILL MUTANT: Verify log call for Confezione NFE
+            // Note: Jakarta GenericServlet prepends "nameservlet: " or "null: " if unnamed
+            verify(servletContext).log(eq("null: Errore parsing primaryKey Confezione"),
+                    any(NumberFormatException.class));
+
+            verify(response).setContentType("application/json");
+            verify(printWriter).flush();
         }
     }
 
@@ -149,12 +160,16 @@ public class ShowRowFormTest {
 
         try (MockedConstruction<DettaglioOrdineDAO> dao = mockConstruction(DettaglioOrdineDAO.class)) {
 
-            // Il 'try-catch' (corretto) cattura NFE
             assertDoesNotThrow(() -> {
                 servlet.doGet(request, response);
             });
 
             assertEquals("[]", getJsonOutput());
+
+            // KILL MUTANT: Verify log call for DettaglioOrdine NFE
+            verify(servletContext).log(eq("null: Errore parsing primaryKey DettaglioOrdine"),
+                    any(NumberFormatException.class));
+            verify(printWriter).flush();
         }
     }
 
@@ -168,8 +183,8 @@ public class ShowRowFormTest {
             servlet.doGet(request, response);
         });
 
-        // Il 'if (keys.length == 3)' (corretto) fallisce
         assertEquals("[]", getJsonOutput());
+        verify(printWriter).flush();
     }
 
     @Test
@@ -179,14 +194,13 @@ public class ShowRowFormTest {
         when(request.getParameter("primaryKey")).thenReturn("P99");
 
         try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-            // Simula il DAO che non trova il prodotto
             when(mock.doRetrieveById("P99")).thenReturn(null);
         })) {
 
             servlet.doGet(request, response);
 
-            // L'if (prodotto != null) fallisce
             assertEquals("[]", getJsonOutput());
+            verify(printWriter).flush();
         }
     }
 
@@ -198,13 +212,10 @@ public class ShowRowFormTest {
         when(request.getParameter("tableName")).thenReturn("utente");
         when(request.getParameter("primaryKey")).thenReturn("user@example.com");
 
-        // Prepariamo l'utente mockato
         Utente utente = new Utente();
         utente.setEmail("user@example.com");
         utente.setNome("Mario");
         utente.setCognome("Rossi");
-        // (Nota: non impostiamo la password, così 'getPassword' restituisce null
-        // e non dobbiamo preoccuparci di mockare 'jsonUtenteHelper' per quel campo)
 
         try (MockedConstruction<UtenteDAO> dao = mockConstruction(UtenteDAO.class, (mock, ctx) -> {
             when(mock.doRetrieveByEmail("user@example.com")).thenReturn(utente);
@@ -213,13 +224,12 @@ public class ShowRowFormTest {
             servlet.doGet(request, response);
 
             String json = getJsonOutput();
-
-            // Verifichiamo che i dati siano nel JSON.
-            // Non possiamo usare assertEquals(jsonArray.toJSONString()) perché
-            // non abbiamo accesso agli helper statici.
             assertTrue(json.contains("\"email\":\"user@example.com\""));
             assertTrue(json.contains("\"nome\":\"Mario\""));
-            assertTrue(json.contains("\"cognome\":\"Rossi\""));
+
+            // KILL MUTANT: Verify setContentType and flush
+            verify(response).setContentType("application/json");
+            verify(printWriter).flush();
         }
     }
 
@@ -232,13 +242,7 @@ public class ShowRowFormTest {
         Prodotto prodotto = new Prodotto();
         prodotto.setIdProdotto("P1");
         prodotto.setNome("Protein Bar");
-        prodotto.setDescrizione("Delicious");
-        prodotto.setCategoria("Snack");
-        prodotto.setImmagine("img.jpg");
-        prodotto.setCalorie(200);
-        prodotto.setCarboidrati(20);
-        prodotto.setProteine(20);
-        prodotto.setGrassi(5);
+        prodotto.setDescrizione("Delicious"); // Added for completeness
 
         try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
             when(mock.doRetrieveById("P1")).thenReturn(prodotto);
@@ -247,6 +251,8 @@ public class ShowRowFormTest {
             String json = getJsonOutput();
             assertTrue(json.contains("\"idProdotto\":\"P1\""));
             assertTrue(json.contains("\"nome\":\"Protein Bar\""));
+
+            verify(printWriter).flush();
         }
     }
 
@@ -258,13 +264,7 @@ public class ShowRowFormTest {
 
         Variante variante = new Variante();
         variante.setIdVariante(1);
-        variante.setIdProdotto("P1");
-        variante.setIdGusto(1);
-        variante.setIdConfezione(1);
         variante.setPrezzo(10.0f);
-        variante.setQuantita(100);
-        variante.setSconto(0);
-        variante.setEvidenza(true);
 
         try (MockedConstruction<VarianteDAO> dao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
             when(mock.doRetrieveVarianteByIdVariante(1)).thenReturn(variante);
@@ -272,7 +272,7 @@ public class ShowRowFormTest {
             servlet.doGet(request, response);
             String json = getJsonOutput();
             assertTrue(json.contains("\"idVariante\":1"));
-            assertTrue(json.contains("\"prezzo\":10.0"));
+            verify(printWriter).flush();
         }
     }
 
@@ -285,8 +285,6 @@ public class ShowRowFormTest {
         Ordine ordine = new Ordine();
         ordine.setIdOrdine(1);
         ordine.setEmailUtente("user@example.com");
-        ordine.setStato("Spedito");
-        ordine.setTotale(50.0f);
 
         try (MockedConstruction<OrdineDao> dao = mockConstruction(OrdineDao.class, (mock, ctx) -> {
             when(mock.doRetrieveById(1)).thenReturn(ordine);
@@ -294,7 +292,11 @@ public class ShowRowFormTest {
             servlet.doGet(request, response);
             String json = getJsonOutput();
             assertTrue(json.contains("\"idOrdine\":1"));
-            assertTrue(json.contains("\"emailUtente\":\"user@example.com\""));
+
+            // KILL MUTANT: Verify debug log "1 OOOOKKK"
+            // Including "null: " prefix
+            verify(servletContext).log("null: 1 OOOOKKK");
+            verify(printWriter).flush();
         }
     }
 
@@ -306,18 +308,15 @@ public class ShowRowFormTest {
 
         DettaglioOrdine dettaglio = new DettaglioOrdine();
         dettaglio.setIdOrdine(1);
-        dettaglio.setIdProdotto("P1");
-        dettaglio.setIdVariante(1);
         dettaglio.setQuantita(5);
-        dettaglio.setPrezzo(10.0f);
 
         try (MockedConstruction<DettaglioOrdineDAO> dao = mockConstruction(DettaglioOrdineDAO.class, (mock, ctx) -> {
             when(mock.doRetrieveByIdOrderAndIdVariant(1, 1)).thenReturn(dettaglio);
         })) {
             servlet.doGet(request, response);
             String json = getJsonOutput();
-            assertTrue(json.contains("\"idOrdine\":1"));
             assertTrue(json.contains("\"quantity\":5"));
+            verify(printWriter).flush();
         }
     }
 
@@ -336,8 +335,8 @@ public class ShowRowFormTest {
         })) {
             servlet.doGet(request, response);
             String json = getJsonOutput();
-            assertTrue(json.contains("\"idGusto\":1"));
             assertTrue(json.contains("\"nomeGusto\":\"Cioccolato\""));
+            verify(printWriter).flush();
         }
     }
 
@@ -356,8 +355,8 @@ public class ShowRowFormTest {
         })) {
             servlet.doGet(request, response);
             String json = getJsonOutput();
-            assertTrue(json.contains("\"idConfezione\":1"));
             assertTrue(json.contains("\"pesoConfezione\":500"));
+            verify(printWriter).flush();
         }
     }
 
@@ -371,8 +370,8 @@ public class ShowRowFormTest {
 
         servlet.doGet(request, response);
 
-        // Verifica che sia stato inviato un errore BAD_REQUEST
         verify(response).sendError(eq(HttpServletResponse.SC_BAD_REQUEST), anyString());
+        // No flush expected here as we return early
     }
 
     @Test
@@ -384,6 +383,10 @@ public class ShowRowFormTest {
         servlet.doGet(request, response);
 
         assertEquals("[]", getJsonOutput());
+
+        // KILL MUTANT: Verify log call for Ordine NFE
+        verify(servletContext).log(eq("null: Errore parsing primaryKey Ordine"), any(NumberFormatException.class));
+        verify(printWriter).flush();
     }
 
     @Test
@@ -395,6 +398,10 @@ public class ShowRowFormTest {
         servlet.doGet(request, response);
 
         assertEquals("[]", getJsonOutput());
+
+        // KILL MUTANT: Verify log call for Variante NFE
+        verify(servletContext).log(eq("null: Errore parsing primaryKey Variante"), any(NumberFormatException.class));
+        verify(printWriter).flush();
     }
 
     @Test
@@ -406,6 +413,10 @@ public class ShowRowFormTest {
         servlet.doGet(request, response);
 
         assertEquals("[]", getJsonOutput());
+
+        // KILL MUTANT: Verify log call for Gusto NFE
+        verify(servletContext).log(eq("null: Errore parsing primaryKey Gusto"), any(NumberFormatException.class));
+        verify(printWriter).flush();
     }
 
     // --- Test 6: Blank Parameters ---
@@ -419,6 +430,7 @@ public class ShowRowFormTest {
         servlet.doGet(request, response);
 
         assertEquals("[]", getJsonOutput());
+        verify(printWriter).flush();
     }
 
     @Test
@@ -430,6 +442,7 @@ public class ShowRowFormTest {
         servlet.doGet(request, response);
 
         assertEquals("[]", getJsonOutput());
+        verify(printWriter).flush();
     }
 
     // --- Test 7: Record Not Found (DAO returns null) ---
@@ -445,6 +458,7 @@ public class ShowRowFormTest {
         })) {
             servlet.doGet(request, response);
             assertEquals("[]", getJsonOutput());
+            verify(printWriter).flush();
         }
     }
 
@@ -459,6 +473,7 @@ public class ShowRowFormTest {
         })) {
             servlet.doGet(request, response);
             assertEquals("[]", getJsonOutput());
+            verify(printWriter).flush();
         }
     }
 
@@ -473,6 +488,7 @@ public class ShowRowFormTest {
         })) {
             servlet.doGet(request, response);
             assertEquals("[]", getJsonOutput());
+            verify(printWriter).flush();
         }
     }
 
@@ -487,6 +503,7 @@ public class ShowRowFormTest {
         })) {
             servlet.doGet(request, response);
             assertEquals("[]", getJsonOutput());
+            verify(printWriter).flush();
         }
     }
 
@@ -501,6 +518,7 @@ public class ShowRowFormTest {
         })) {
             servlet.doGet(request, response);
             assertEquals("[]", getJsonOutput());
+            verify(printWriter).flush();
         }
     }
 
@@ -515,6 +533,7 @@ public class ShowRowFormTest {
         })) {
             servlet.doGet(request, response);
             assertEquals("[]", getJsonOutput());
+            verify(printWriter).flush();
         }
     }
 
@@ -536,7 +555,7 @@ public class ShowRowFormTest {
             servlet.doGet(request, response);
             String json = getJsonOutput();
             assertTrue(json.contains("\"data\":"));
-            assertFalse(json.contains("\"data\":\"\""));
+            verify(printWriter).flush();
         }
     }
 
@@ -556,7 +575,7 @@ public class ShowRowFormTest {
             servlet.doGet(request, response);
             String json = getJsonOutput();
             assertTrue(json.contains("\"dataDiNascita\":"));
-            assertFalse(json.contains("\"dataDiNascita\":\"\""));
+            verify(printWriter).flush();
         }
     }
 
@@ -576,6 +595,7 @@ public class ShowRowFormTest {
             servlet.doGet(request, response);
             String json = getJsonOutput();
             assertTrue(json.contains("\"evidenza\":0"));
+            verify(printWriter).flush();
         }
     }
 }

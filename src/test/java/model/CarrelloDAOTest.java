@@ -73,6 +73,28 @@ class CarrelloDAOTest {
     }
 
     @Test
+    void doRemoveCartByUser_PrintsCorrectMessage() throws SQLException {
+        String email = "delete@test.com";
+        // Cattura Stdout
+        java.io.ByteArrayOutputStream outContent = new java.io.ByteArrayOutputStream();
+        System.setOut(new java.io.PrintStream(outContent));
+
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeUpdate()).thenReturn(5);
+
+            carrelloDAO.doRemoveCartByUser(email);
+
+            // Verifica Output
+            String output = outContent.toString();
+            assertTrue(output.contains("Eliminate correttamente: 5righe dal carrello di: " + email));
+        } finally {
+            System.setOut(System.out); // Ripristina stdout
+        }
+    }
+
+    @Test
     void doRetrieveCartItemsByUser_Success_WithJoins() throws SQLException {
         String email = "user@test.com";
 
@@ -117,6 +139,11 @@ class CarrelloDAOTest {
             assertEquals(1000, item.getPesoConfezione());
             assertEquals("Protein Shake", item.getNomeProdotto());
             assertEquals("img.jpg", item.getImmagineProdotto());
+
+            // Verifica campi mancanti per killare mutanti
+            assertEquals(email, item.getEmailUtente());
+            assertEquals(5, item.getIdVariante());
+            assertEquals(15.50f, item.getPrezzo());
 
             verify(mockPreparedStatement).setString(1, email);
         }
@@ -179,7 +206,16 @@ class CarrelloDAOTest {
             when(mockPreparedStatement.executeUpdate()).thenReturn(0);
 
             // Should not throw exception, just print to stdout
-            carrelloDAO.doRemoveCartByUser("nodelete@test.com");
+            java.io.ByteArrayOutputStream outContent = new java.io.ByteArrayOutputStream();
+            System.setOut(new java.io.PrintStream(outContent));
+
+            try {
+                carrelloDAO.doRemoveCartByUser("nodelete@test.com");
+                String output = outContent.toString();
+                assertTrue(output.contains("Nessuna riga eliminata"));
+            } finally {
+                System.setOut(System.out);
+            }
 
             verify(mockPreparedStatement).executeUpdate();
         }

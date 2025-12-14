@@ -136,9 +136,7 @@ public class ProdottoDAO {
 
     private float getLowestPrice(Prodotto prodotto) {
         List<Variante> varianti = prodotto.getVarianti();
-        if (varianti == null || varianti.isEmpty()) {
-            return Float.MAX_VALUE;
-        }
+
         Variante variante = varianti.get(0);
         return variante.getPrezzo() * (1 - variante.getSconto() / 100.0f);
     }

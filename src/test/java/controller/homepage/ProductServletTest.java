@@ -35,6 +35,7 @@ public class ProductServletTest {
     private HttpServletRequest request;
     private HttpServletResponse response;
     private RequestDispatcher dispatcher;
+    private ServletContext servletContext;
 
     @BeforeEach
     void setup() throws Exception {
@@ -45,9 +46,9 @@ public class ProductServletTest {
 
         // Mock ServletConfig e ServletContext per permettere il logging
         ServletConfig servletConfig = mock(ServletConfig.class);
-        ServletContext servletContext = mock(ServletContext.class);
+        servletContext = mock(ServletContext.class);
         when(servletConfig.getServletContext()).thenReturn(servletContext);
-        
+
         // Inizializza il servlet con il config mockato
         servlet.init(servletConfig);
 
@@ -63,8 +64,44 @@ public class ProductServletTest {
         // Usiamo uno 'spy' per verificare la chiamata a un altro metodo della stessa
         // classe
         ProductServlet spyServlet = spy(new ProductServlet());
+        spyServlet.init(mock(ServletConfig.class)); // Init spy
         spyServlet.doPost(request, response);
         verify(spyServlet).doGet(request, response);
+    }
+
+    // --- Test 6: Eccezioni ---
+
+    @Test
+    @DisplayName("doGet in caso di eccezione logga e invia errore 500")
+    void doGet_exception_logsAndSendsError() throws ServletException, IOException {
+        // Forziamo un'eccezione non controllata
+        when(request.getParameter("primaryKey")).thenThrow(new RuntimeException("Forced Exception"));
+
+        servlet.doGet(request, response);
+
+        // Verifica Logging
+        verify(servletContext).log(eq("null: Errore in ProductServlet doGet"), any(RuntimeException.class));
+
+        // Verifica Invio Errore
+        verify(response).sendError(eq(HttpServletResponse.SC_INTERNAL_SERVER_ERROR), anyString());
+    }
+
+    @Test
+    @DisplayName("doPost in caso di eccezione logga e invia errore 500")
+    void doPost_exception_logsAndSendsError() throws ServletException, IOException {
+        // Creiamo uno spy per far lanciare eccezione a doGet
+        ProductServlet spyServlet = spy(servlet);
+
+        // doThrow deve essere usato sui metodi void
+        doThrow(new ServletException("Forced ServletException")).when(spyServlet).doGet(any(), any());
+
+        spyServlet.doPost(request, response);
+
+        // Verifica Logging
+        verify(servletContext).log(eq("null: Errore in ProductServlet doPost"), any(ServletException.class));
+
+        // Verifica Invio Errore
+        verify(response).sendError(eq(HttpServletResponse.SC_INTERNAL_SERVER_ERROR), eq("Errore interno."));
     }
 
     // --- Test 2: primaryKey è null ---

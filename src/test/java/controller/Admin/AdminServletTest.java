@@ -76,8 +76,8 @@ public class AdminServletTest {
     // --- Test 3: Failure Path (Utente non Admin) ---
 
     @Test
-    @DisplayName("Utente Non-Admin -> Non fa nulla (nessun forward)")
-    void doGet_nonAdminUser_doesNothing() throws ServletException, IOException {
+    @DisplayName("Utente Non-Admin -> Invia Errore 403")
+    void doGet_nonAdminUser_sendsError403() throws ServletException, IOException {
         // Prepara un utente mock che NON è admin
         Utente normalUser = mock(Utente.class);
         when(normalUser.getPoteri()).thenReturn(false);
@@ -90,13 +90,16 @@ public class AdminServletTest {
         // Verifica che il forward NON sia avvenuto
         verify(request, never()).getRequestDispatcher(anyString());
         verify(dispatcher, never()).forward(request, response);
+
+        // KILL MUTANT: Verifica invocazione sendError
+        verify(response).sendError(HttpServletResponse.SC_FORBIDDEN, "Accesso Negato");
     }
 
     // --- Test 4: Failure Path (Guest) ---
 
     @Test
-    @DisplayName("Utente Non Loggato (Guest) -> Non fa nulla (nessun forward)")
-    void doGet_guestUser_doesNothing() throws ServletException, IOException {
+    @DisplayName("Utente Non Loggato (Guest) -> Invia Errore 403")
+    void doGet_guestUser_sendsError403() throws ServletException, IOException {
         // Simula un utente non loggato
         when(session.getAttribute("Utente")).thenReturn(null);
 
@@ -105,5 +108,8 @@ public class AdminServletTest {
         // Verifica che il forward NON sia avvenuto
         verify(request, never()).getRequestDispatcher(anyString());
         verify(dispatcher, never()).forward(request, response);
+
+        // KILL MUTANT: Verifica invocazione sendError
+        verify(response).sendError(HttpServletResponse.SC_FORBIDDEN, "Accesso Negato");
     }
 }

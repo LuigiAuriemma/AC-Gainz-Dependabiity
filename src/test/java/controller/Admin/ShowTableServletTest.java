@@ -268,8 +268,8 @@ public class ShowTableServletTest {
     // --- Test 11: Sad Path (tableName non valido) ---
 
     @Test
-    @DisplayName("doGet con 'tableName' non valido -> Non fa nulla")
-    void doGet_invalidTableName_doesNothing() throws ServletException, IOException {
+    @DisplayName("doGet con 'tableName' non valido -> Invia SC_BAD_REQUEST")
+    void doGet_invalidTableName_sendsBadRequest() throws ServletException, IOException {
         when(request.getParameter("tableName")).thenReturn("tabellaSbagliata");
 
         // Mockiamo un DAO solo per essere sicuri che non venga chiamato
@@ -279,9 +279,12 @@ public class ShowTableServletTest {
 
             // Verifica che nessun DAO sia stato creato (nessun case combacia)
             assertEquals(0, dao.constructed().size());
-            // Verifica che non ci sia stato forward
+
+            // KILL MUTANT: Verify that sendError is called
+            verify(response).sendError(eq(HttpServletResponse.SC_BAD_REQUEST), anyString());
+
+            // Verifica che non ci sia stato forward o redirect
             verify(request, never()).getRequestDispatcher(anyString());
-            // Verifica che non ci sia stato redirect
             verify(response, never()).sendRedirect(anyString());
         }
     }

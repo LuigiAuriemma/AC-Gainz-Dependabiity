@@ -41,6 +41,7 @@ public class ShowOptionsTest {
     // Per catturare l'output JSON
     private StringWriter stringWriter;
     private PrintWriter printWriter;
+    private ServletContext servletContext;
 
     @BeforeEach
     void setup() throws Exception {
@@ -50,15 +51,15 @@ public class ShowOptionsTest {
 
         // Mock ServletConfig e ServletContext per permettere il logging
         ServletConfig servletConfig = mock(ServletConfig.class);
-        ServletContext servletContext = mock(ServletContext.class);
+        servletContext = mock(ServletContext.class);
         when(servletConfig.getServletContext()).thenReturn(servletContext);
-        
+
         // Inizializza il servlet con il config mockato
         servlet.init(servletConfig);
 
         // Prepariamo un writer in memoria per catturare l'output JSON
         stringWriter = new StringWriter();
-        printWriter = new PrintWriter(stringWriter);
+        printWriter = spy(new PrintWriter(stringWriter)); // Spy!
 
         // Quando la servlet chiede il writer, le diamo il nostro
         when(response.getWriter()).thenReturn(printWriter);
@@ -184,6 +185,9 @@ public class ShowOptionsTest {
             String json = getJsonOutput();
 
             // 3. Verifica
+            verify(response).setContentType("application/json");
+            verify(printWriter, times(2)).flush();
+
             // Verifichiamo che i pezzi chiave del JSON siano presenti
             assertTrue(json.contains("\"nomeProdotto\":\"Proteine\""));
             assertTrue(json.contains("\"cheapestFlavour\":\"Cioccolato\""));
@@ -257,6 +261,7 @@ public class ShowOptionsTest {
 
             // Verifichiamo che l'output sia ordinato (500 prima di 1000)
             assertEquals("[{\"peso\":500},{\"peso\":1000}]", json);
+            verify(printWriter, times(2)).flush();
         }
     }
 
@@ -272,7 +277,7 @@ public class ShowOptionsTest {
         })) {
 
             servlet.doGet(request, response);
-            
+
             // Verifica che non sia stato prodotto nessun output
             assertTrue(getJsonOutput().isEmpty());
         }
@@ -307,6 +312,7 @@ public class ShowOptionsTest {
             // e contenga i dati corretti
             assertTrue(json.contains("\"sconto\":5"));
             assertTrue(json.contains("\"prezzo\":29.99"));
+            verify(printWriter, times(2)).flush();
         }
     }
 
@@ -436,6 +442,75 @@ public class ShowOptionsTest {
 
             servlet.doGet(request, response);
             assertTrue(getJsonOutput().isEmpty());
+        }
+    }
+
+    @Nested
+    @DisplayName("Test Gestione Eccezioni e Logging")
+    class ExceptionHandlingTests {
+
+        @Test
+        @DisplayName("NumberFormatException su idVariante -> Logga errore")
+        void showFirst_invalidIdVariante_logsError() throws ServletException, IOException {
+            when(request.getParameter("action")).thenReturn("showFirst");
+            when(request.getParameter("idVariante")).thenReturn("abc"); // Non numerico
+
+            servlet.doGet(request, response);
+
+            verify(servletContext).log(eq("null: Errore parsing idVariante"), any(NumberFormatException.class));
+            assertTrue(getJsonOutput().isEmpty());
+        }
+
+        @Test
+        @DisplayName("NumberFormatException su weight -> Logga errore")
+        void updatePrice_invalidWeight_logsError() throws ServletException, IOException {
+            when(request.getParameter("action")).thenReturn("updatePrice");
+            when(request.getParameter("idProdotto")).thenReturn("P1");
+            when(request.getParameter("flavour")).thenReturn("Vaniglia");
+            when(request.getParameter("weight")).thenReturn("abc"); // Non numerico
+
+            servlet.doGet(request, response);
+
+            verify(servletContext).log(eq("null: Errore parsing weight"), any(NumberFormatException.class));
+            assertTrue(getJsonOutput().isEmpty());
+        }
+
+        @Test
+        @DisplayName("Eccezione generica in doGet -> Logga e invia errore 500")
+        void doGet_genericException_logsAndSendsError() throws ServletException, IOException {
+            // Forziamo un'eccezione non controllata su uno dei parametri
+            when(request.getParameter("action")).thenThrow(new RuntimeException("Forced RuntimeException"));
+
+            servlet.doGet(request, response);
+
+            // Verifica Logging (GenericServlet prepende "null: " o simile a volte, ma
+            // usiamo eq se possibile o startWith se serve,
+            // ma dalla classe ProductServlet abbiamo visto che serve "null: " se
+            // GenericServlet lo aggiunge.
+            // Qui siamo in HttpServlet, che estende GenericServlet.
+            // Verifichiamo con eq("Errore ...") se il mock non aggiunge nulla, ma System
+            // loggatr lo fa.
+            // Proviamo con eq("Errore in ShowOptions doGet") e se fallisce correggiamo.
+            // Nota: ProductServletTest falliva perché GenericServlet.log(msg, ex) chiamava
+            // log(msg + ": " + ex.getMessage(), ex) o simile internamente?
+            // No, era "null: msg" perché getServletConfig().getServletName() era null?
+            // In ProductServletTest avevamo mockato ServletConfig e ServletContext.
+            // Qui idem. Verifichiamo cosa accade.
+            verify(servletContext).log(eq("null: Errore in ShowOptions doGet"), any(RuntimeException.class));
+            verify(response).sendError(eq(HttpServletResponse.SC_INTERNAL_SERVER_ERROR), anyString());
+        }
+
+        @Test
+        @DisplayName("Eccezione in doPost -> Logga e invia errore 500")
+        void doPost_exception_logsAndSendsError() throws ServletException, IOException {
+            ShowOptions spyServlet = spy(servlet);
+            // doThrow su metodo void
+            doThrow(new ServletException("Forced ServletException")).when(spyServlet).doGet(any(), any());
+
+            spyServlet.doPost(request, response);
+
+            verify(servletContext).log(eq("null: Errore in ShowOptions doPost"), any(ServletException.class));
+            verify(response).sendError(eq(HttpServletResponse.SC_INTERNAL_SERVER_ERROR), anyString());
         }
     }
 }

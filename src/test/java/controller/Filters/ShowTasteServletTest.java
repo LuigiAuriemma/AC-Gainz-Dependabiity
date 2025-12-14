@@ -1,6 +1,7 @@
 package controller.Filters;
 
-import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -22,12 +23,14 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
  * Classe di test (aggiornata) per ShowTasteServlet.
- * Verifica che la servlet gestisca correttamente i 'null'
- * e i percorsi di successo.
+ * Verifica Happy Path, Flush, ContentType e GESTIONE ECCEZIONI.
  */
 public class ShowTasteServletTest {
 
@@ -35,21 +38,30 @@ public class ShowTasteServletTest {
     private HttpServletRequest request;
     private HttpServletResponse response;
     private HttpSession session;
+    private ServletContext servletContext;
 
     // Per catturare l'output JSON
     private StringWriter stringWriter;
     private PrintWriter printWriter;
 
     @BeforeEach
-    void setup() throws IOException {
-        servlet = new ShowTasteServlet();
+    void setup() throws Exception {
+        servlet = spy(new ShowTasteServlet());
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         session = mock(HttpSession.class);
 
+        // MOCK ServletContext per i log
+        ServletConfig servletConfig = mock(ServletConfig.class);
+        servletContext = mock(ServletContext.class);
+        when(servletConfig.getServletContext()).thenReturn(servletContext);
+
+        servlet.init(servletConfig);
+
         // Prepariamo un writer in memoria per catturare l'output JSON
+        // USIAMO SPY per verificare flush()
         stringWriter = new StringWriter();
-        printWriter = new PrintWriter(stringWriter);
+        printWriter = spy(new PrintWriter(stringWriter));
 
         // Stub di base
         when(request.getSession()).thenReturn(session);
@@ -69,44 +81,41 @@ public class ShowTasteServletTest {
     @Test
     @DisplayName("doPost deve delegare a doGet")
     void doPost_delegatesToDoGet() throws ServletException, IOException {
-        ShowTasteServlet spyServlet = spy(new ShowTasteServlet());
         // Disattiviamo il doGet reale per testare solo la delega
-        doNothing().when(spyServlet).doGet(any(HttpServletRequest.class), any(HttpServletResponse.class));
+        doNothing().when(servlet).doGet(any(HttpServletRequest.class), any(HttpServletResponse.class));
 
-        spyServlet.doPost(request, response);
+        servlet.doPost(request, response);
 
-        verify(spyServlet).doGet(request, response);
+        verify(servlet).doGet(request, response);
     }
 
     // --- Test 2: Casi Gestiti (Input vuoti) ---
 
     @Test
-    @DisplayName("doGet con 'filteredProducts' nullo in sessione -> Restituisce []")
+    @DisplayName("doGet con 'filteredProducts' nullo in sessione -> Restituisce [] e Flush")
     void doGet_nullProductsInSession_returnsEmptyJson() throws ServletException, IOException {
-        // Simula la sessione che non ha l'attributo
         when(session.getAttribute("filteredProducts")).thenReturn(null);
 
         try (MockedConstruction<VarianteDAO> dao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-            // Stub: Il DAO viene chiamato con una lista vuota e restituisce vuoto
             when(mock.doRetrieveVariantiByProdotti(any(List.class))).thenReturn(new ArrayList<>());
         })) {
 
             servlet.doGet(request, response);
 
-            // Verifica che il DAO sia stato chiamato con una lista vuota
             ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
             verify(dao.constructed().get(0)).doRetrieveVariantiByProdotti(captor.capture());
             assertTrue(captor.getValue().isEmpty());
 
-            // Verifica che l'output sia un array JSON vuoto
+            verify(response).setContentType("application/json");
+            verify(printWriter).flush();
+
             assertEquals("[]", getJsonOutput());
         }
     }
 
     @Test
-    @DisplayName("doGet con 'filteredProducts' vuoto in sessione -> Restituisce []")
+    @DisplayName("doGet con 'filteredProducts' vuoto in sessione -> Restituisce [] e Flush")
     void doGet_emptyProductsInSession_returnsEmptyJson() throws ServletException, IOException {
-        // Simula la sessione che ha una lista vuota
         when(session.getAttribute("filteredProducts")).thenReturn(new ArrayList<Prodotto>());
 
         try (MockedConstruction<VarianteDAO> dao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
@@ -115,70 +124,113 @@ public class ShowTasteServletTest {
 
             servlet.doGet(request, response);
 
-            // Verifica che il DAO sia stato chiamato con una lista vuota
             ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
             verify(dao.constructed().get(0)).doRetrieveVariantiByProdotti(captor.capture());
             assertTrue(captor.getValue().isEmpty());
 
-            // Verifica che l'output sia un array JSON vuoto
+            verify(response).setContentType("application/json");
+            verify(printWriter).flush();
+
             assertEquals("[]", getJsonOutput());
         }
     }
-
 
     // --- Test 3: Verifica della Correzione della Faglia ---
 
     @Test
     @DisplayName("(CORRETTO) DAO restituisce 'varianti' null -> Gestito e Restituisce []")
     void doGet_nullVariantiFromDAO_isHandledSafely() throws ServletException, IOException {
-        // La sessione ha prodotti validi
         List<Prodotto> productList = List.of(new Prodotto());
         when(session.getAttribute("filteredProducts")).thenReturn(productList);
 
         try (MockedConstruction<VarianteDAO> dao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-            // Ma il DAO restituisce null (simula errore DB o altro)
             when(mock.doRetrieveVariantiByProdotti(productList)).thenReturn(null);
         })) {
 
-            // 1. Verifica che NON ci sia nessun crash
             assertDoesNotThrow(() -> {
                 servlet.doGet(request, response);
             });
 
-            // 2. Verifica che l'output sia un array JSON vuoto
+            verify(response).setContentType("application/json");
+            verify(printWriter).flush();
+
             assertEquals("[]", getJsonOutput());
         }
     }
 
-
     // --- Test 4: Happy Path (Conteggio) ---
 
     @Test
-    @DisplayName("(Happy Path) Conta e formatta i gusti correttamente")
+    @DisplayName("(Happy Path) Conta e formatta i gusti correttamente -> JSON, ContentType e Flush")
     void doGet_happyPath_returnsTasteCounts() throws ServletException, IOException {
-        // La sessione ha prodotti
         List<Prodotto> productList = List.of(new Prodotto());
         when(session.getAttribute("filteredProducts")).thenReturn(productList);
 
-        // Prepariamo i dati mock
-        Variante v1 = new Variante(); v1.setGusto("Cioccolato");
-        Variante v2 = new Variante(); v2.setGusto("Vaniglia");
-        Variante v3 = new Variante(); v3.setGusto("Cioccolato"); // Duplicato
+        Variante v1 = new Variante();
+        v1.setGusto("Cioccolato");
+        Variante v2 = new Variante();
+        v2.setGusto("Vaniglia");
+        Variante v3 = new Variante();
+        v3.setGusto("Cioccolato");
         List<Variante> variantiFromDB = List.of(v1, v2, v3);
 
         try (MockedConstruction<VarianteDAO> dao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-            // Il DAO restituisce la lista con 3 varianti
             when(mock.doRetrieveVariantiByProdotti(productList)).thenReturn(variantiFromDB);
         })) {
 
             servlet.doGet(request, response);
 
-            String json = getJsonOutput();
+            verify(response).setContentType("application/json");
+            verify(printWriter).flush();
 
-            // L'ordine in un JSONArray creato da un HashMap non è garantito,
-            // quindi verifichiamo solo che le stringhe corrette siano presenti.
+            String json = getJsonOutput();
             assertTrue(json.contains("\"Cioccolato (2)\""));
             assertTrue(json.contains("\"Vaniglia (1)\""));
         }
+    }
+
+    // --- Test 5: Exception Handling (Kill No-Coverage Mutants) ---
+
+    @Test
+    @DisplayName("doGet Exception -> Logs error and sends 500")
+    void doGet_exception_sendsError500() throws IOException, ServletException {
+        // Force an exception during execution, e.g. getWriter throws IOException
+        when(response.getWriter()).thenThrow(new IOException("Disk full"));
+
+        servlet.doGet(request, response);
+
+        // Verify Logging
+        // GenericServlet appends "ServletName: " prefix, so we check using endsWith
+        verify(servletContext).log(argThat(msg -> msg != null && msg.endsWith("Errore in ShowTasteServlet doGet")),
+                any(Exception.class));
+        // Verify Error Response
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+                "Errore interno nel recupero dei gusti.");
+    }
+
+    @Test
+    @DisplayName("doGet Exception (Response Committed) -> Logs error but NO 500")
+    void doGet_exception_committed_doesNotSendError() throws IOException, ServletException {
+        when(response.getWriter()).thenThrow(new IOException("Disk full"));
+        when(response.isCommitted()).thenReturn(true);
+
+        servlet.doGet(request, response);
+
+        verify(servletContext).log(argThat(msg -> msg != null && msg.endsWith("Errore in ShowTasteServlet doGet")),
+                any(Exception.class));
+        verify(response, never()).sendError(anyInt(), anyString());
+    }
+
+    @Test
+    @DisplayName("doPost Exception (via doGet) -> Logs error and sends 500")
+    void doPost_exception_sendsError500() throws ServletException, IOException {
+        // Force doGet to throw exception
+        doThrow(new ServletException("Crash via doGet")).when(servlet).doGet(any(), any());
+
+        servlet.doPost(request, response);
+
+        verify(servletContext).log(argThat(msg -> msg != null && msg.endsWith("Errore in ShowTasteServlet doPost")),
+                any(Exception.class));
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
     }
 }

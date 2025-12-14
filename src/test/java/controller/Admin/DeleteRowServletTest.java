@@ -5,13 +5,16 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import model.*;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import org.mockito.MockedConstruction;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
@@ -38,8 +41,13 @@ public class DeleteRowServletTest {
     private StringWriter stringWriter;
     private PrintWriter printWriter;
 
+    // Per catturare System.out
+    private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
+    private final PrintStream originalOut = System.out;
+
     @BeforeEach
     void setup() throws IOException {
+        System.setOut(new PrintStream(outContent));
         servlet = new deleteRowServlet();
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
@@ -47,7 +55,7 @@ public class DeleteRowServletTest {
 
         // Prepariamo un writer in memoria per catturare l'output JSON
         stringWriter = new StringWriter();
-        printWriter = new PrintWriter(stringWriter);
+        printWriter = spy(new PrintWriter(stringWriter)); // Spy to verify flush
 
         // Stub di base
         when(request.getSession()).thenReturn(session);
@@ -55,11 +63,16 @@ public class DeleteRowServletTest {
         when(response.getWriter()).thenReturn(printWriter);
     }
 
+    @AfterEach
+    void restoreStreams() {
+        System.setOut(originalOut);
+    }
+
     /**
      * Helper per ottenere l'output JSON catturato.
      */
     private String getJsonOutput() {
-        printWriter.flush();
+        // Non flusho manualmente il writer, per verificare che lo faccia la servlet.
         return stringWriter.toString().trim();
     }
 
@@ -103,8 +116,6 @@ public class DeleteRowServletTest {
             servlet.doGet(request, response);
         });
 
-        // Il metodo isValidPrimaryKey (corretto) restituisce false,
-        // 'success' è false, quindi invia un errore 400
         verify(response).sendError(eq(HttpServletResponse.SC_BAD_REQUEST), anyString());
         verify(response, never()).getWriter();
     }
@@ -119,8 +130,6 @@ public class DeleteRowServletTest {
             servlet.doGet(request, response);
         });
 
-        // handleRemoveRowFromDettaglioOrdine (corretto) restituisce false,
-        // 'success' è false, quindi invia un errore 400
         verify(response).sendError(eq(HttpServletResponse.SC_BAD_REQUEST), anyString());
     }
 
@@ -131,7 +140,6 @@ public class DeleteRowServletTest {
         when(request.getParameter("primaryKey")).thenReturn("admin@example.com");
         when(session.getAttribute("Utente")).thenReturn(null); // Utente non loggato
 
-        // Mock del DAO (necessario per il ramo 'utente')
         try (MockedConstruction<UtenteDAO> dao = mockConstruction(UtenteDAO.class, (mock, ctx) -> {
             when(mock.doRetrieveByEmail(anyString())).thenReturn(new Utente());
             doNothing().when(mock).doRemoveUserByEmail(anyString());
@@ -141,10 +149,11 @@ public class DeleteRowServletTest {
                 servlet.doGet(request, response);
             });
 
-            // Verifica che checkIfAdminDeletingSelf (corretto) abbia restituito false
-            // e che la servlet abbia proseguito normalmente con l'output JSON
             verify(response, never()).sendRedirect(anyString());
             assertTrue(getJsonOutput().startsWith("[")); // Ha scritto il JSON
+
+            // Verify flush was called on printWriter (kills VoidMethodCall on flush)
+            verify(printWriter, atLeastOnce()).flush();
         }
     }
 
@@ -155,25 +164,23 @@ public class DeleteRowServletTest {
     void doGet_deleteProdotto_happyPath_returnsJson() throws ServletException, IOException {
         when(request.getParameter("tableName")).thenReturn("prodotto");
         when(request.getParameter("primaryKey")).thenReturn("P1");
-        // Utente admin in sessione (necessario per non crashare)
         when(session.getAttribute("Utente")).thenReturn(mock(Utente.class));
 
         try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-            // Simula che il prodotto esista
             when(mock.doRetrieveById("P1")).thenReturn(new Prodotto());
-            // Simula che la cancellazione avvenga
             doNothing().when(mock).removeProductFromIdProdotto("P1");
-            // Simula la risposta per il JSON
             when(mock.doRetrieveAll()).thenReturn(new ArrayList<>());
         })) {
 
             servlet.doGet(request, response);
 
-            // Verifica che la cancellazione sia stata chiamata
             verify(dao.constructed().get(0)).removeProductFromIdProdotto("P1");
-            // Verifica che il JSON sia stato inviato
+            verify(response).setContentType("application/json"); // Kills VoidMethodCall on setContentType
             verify(response).getWriter();
-            assertTrue(getJsonOutput().equals("[]")); // JSON di una lista vuota
+            assertTrue(getJsonOutput().equals("[]"));
+
+            // Verify flush (Kills VoidMethodCall on flush)
+            verify(printWriter, atLeastOnce()).flush();
         }
     }
 
@@ -185,25 +192,23 @@ public class DeleteRowServletTest {
         when(request.getParameter("tableName")).thenReturn("utente");
         when(request.getParameter("primaryKey")).thenReturn("admin@example.com");
 
-        // Simula l'admin in sessione
         Utente admin = mock(Utente.class);
         when(admin.getEmail()).thenReturn("admin@example.com");
         when(session.getAttribute("Utente")).thenReturn(admin);
 
         try (MockedConstruction<UtenteDAO> dao = mockConstruction(UtenteDAO.class, (mock, ctx) -> {
-            // Simula che l'utente esista e venga cancellato
             when(mock.doRetrieveByEmail("admin@example.com")).thenReturn(admin);
-            // Non serve mockare doRemove...
         })) {
 
             servlet.doGet(request, response);
 
-            // Verifica che la sessione sia stata invalidata
             verify(session).invalidate();
-            // Verifica il redirect
             verify(response).sendRedirect("index.jsp");
-            // Verifica che NESSUN JSON sia stato inviato
             verify(response, never()).getWriter();
+
+            // Verify System.out was called (Kills VoidMethodCall on println)
+            assertTrue(outContent.toString().contains("Checking if admin is deleting self"),
+                    "Should log check message to stdout");
         }
     }
 
@@ -213,22 +218,20 @@ public class DeleteRowServletTest {
     @DisplayName("Cancella prodotto inesistente -> Gestito e invia 400")
     void doGet_deleteNonExistentProduct_sendsError() throws ServletException, IOException {
         when(request.getParameter("tableName")).thenReturn("prodotto");
-        when(request.getParameter("primaryKey")).thenReturn("P99"); // Prodotto inesistente
+        when(request.getParameter("primaryKey")).thenReturn("P99");
         when(session.getAttribute("Utente")).thenReturn(mock(Utente.class));
 
         try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-            // Simula che il prodotto NON esista
             when(mock.doRetrieveById("P99")).thenReturn(null);
         })) {
 
             servlet.doGet(request, response);
 
-            // Verifica che la cancellazione NON sia stata chiamata
             verify(dao.constructed().get(0), never()).removeProductFromIdProdotto(anyString());
-            // Il metodo (corretto) restituisce false, 'success' è false
             verify(response).sendError(eq(HttpServletResponse.SC_BAD_REQUEST), anyString());
         }
     }
+
     // --- Test 6: Utente ---
 
     @Test
@@ -238,7 +241,7 @@ public class DeleteRowServletTest {
         when(request.getParameter("primaryKey")).thenReturn("user@example.com");
 
         Utente sessionUser = mock(Utente.class);
-        when(sessionUser.getEmail()).thenReturn("admin@example.com"); // Different from deleted user
+        when(sessionUser.getEmail()).thenReturn("admin@example.com");
         when(session.getAttribute("Utente")).thenReturn(sessionUser);
 
         try (MockedConstruction<UtenteDAO> dao = mockConstruction(UtenteDAO.class, (mock, ctx) -> {
@@ -250,8 +253,11 @@ public class DeleteRowServletTest {
             servlet.doGet(request, response);
 
             verify(dao.constructed().get(0)).doRemoveUserByEmail("user@example.com");
+            verify(response).setContentType("application/json");
             verify(response).getWriter();
             assertTrue(getJsonOutput().equals("[]"));
+
+            verify(printWriter, atLeastOnce()).flush();
         }
     }
 
@@ -288,8 +294,10 @@ public class DeleteRowServletTest {
             servlet.doGet(request, response);
 
             verify(dao.constructed().get(0)).doRemoveVariante(1);
+            verify(response).setContentType("application/json");
             verify(response).getWriter();
             assertTrue(getJsonOutput().equals("[]"));
+            verify(printWriter, atLeastOnce()).flush();
         }
     }
 
@@ -325,8 +333,10 @@ public class DeleteRowServletTest {
             servlet.doGet(request, response);
 
             verify(dao.constructed().get(0)).doDeleteOrder(1);
+            verify(response).setContentType("application/json");
             verify(response).getWriter();
             assertTrue(getJsonOutput().equals("[]"));
+            verify(printWriter, atLeastOnce()).flush();
         }
     }
 
@@ -336,7 +346,7 @@ public class DeleteRowServletTest {
     @DisplayName("Cancellazione 'dettaglioOrdine' (Happy Path) -> Restituisce JSON")
     void doGet_deleteDettaglioOrdine_happyPath_returnsJson() throws ServletException, IOException {
         when(request.getParameter("tableName")).thenReturn("dettaglioOrdine");
-        when(request.getParameter("primaryKey")).thenReturn("1, 2, 3"); // idOrdine, idProdotto(ignored), idVariante
+        when(request.getParameter("primaryKey")).thenReturn("1, 2, 3");
         when(session.getAttribute("Utente")).thenReturn(mock(Utente.class));
 
         try (MockedConstruction<DettaglioOrdineDAO> dao = mockConstruction(DettaglioOrdineDAO.class, (mock, ctx) -> {
@@ -345,8 +355,10 @@ public class DeleteRowServletTest {
             servlet.doGet(request, response);
 
             verify(dao.constructed().get(0)).doRemoveDettaglioOrdine(1, 3);
+            verify(response).setContentType("application/json");
             verify(response).getWriter();
             assertTrue(getJsonOutput().equals("[]"));
+            verify(printWriter, atLeastOnce()).flush();
         }
     }
 
@@ -354,14 +366,6 @@ public class DeleteRowServletTest {
     @DisplayName("Cancellazione 'dettaglioOrdine' (Sad Path: Malformed PK) -> Invia 400")
     void doGet_deleteDettaglioOrdine_malformedPK_sendsError() throws ServletException, IOException {
         when(request.getParameter("tableName")).thenReturn("dettaglioOrdine");
-        when(request.getParameter("primaryKey")).thenReturn("1, nan, 3"); // 2nd part is not int (though ignored by
-                                                                          // logic, logic parses 0 and 2)
-        // Wait, logic parses index 0 and 2. Index 1 is ignored?
-        // Code: int idOrdine = Integer.parseInt(primaryKeys[0]);
-        // int idVariante = Integer.parseInt(primaryKeys[2]);
-        // So "1, nan, 3" should work if "nan" is ignored.
-        // Let's try "nan, 2, 3" -> fails.
-
         when(request.getParameter("primaryKey")).thenReturn("nan, 2, 3");
         when(session.getAttribute("Utente")).thenReturn(mock(Utente.class));
 
@@ -374,7 +378,7 @@ public class DeleteRowServletTest {
     @DisplayName("Cancellazione 'dettaglioOrdine' (Sad Path: Partial Invalid PK) -> Invia 400")
     void doGet_deleteDettaglioOrdine_partialInvalidPK_sendsError() throws ServletException, IOException {
         when(request.getParameter("tableName")).thenReturn("dettaglioOrdine");
-        when(request.getParameter("primaryKey")).thenReturn("1, 2, nan"); // 3rd part is not int
+        when(request.getParameter("primaryKey")).thenReturn("1, 2, nan");
         when(session.getAttribute("Utente")).thenReturn(mock(Utente.class));
 
         servlet.doGet(request, response);
@@ -409,8 +413,10 @@ public class DeleteRowServletTest {
             servlet.doGet(request, response);
 
             verify(dao.constructed().get(0)).doRemoveGusto(1);
+            verify(response).setContentType("application/json");
             verify(response).getWriter();
             assertTrue(getJsonOutput().equals("[]"));
+            verify(printWriter, atLeastOnce()).flush();
         }
     }
 
@@ -429,8 +435,10 @@ public class DeleteRowServletTest {
             servlet.doGet(request, response);
 
             verify(dao.constructed().get(0)).doRemoveConfezione(1);
+            verify(response).setContentType("application/json");
             verify(response).getWriter();
             assertTrue(getJsonOutput().equals("[]"));
+            verify(printWriter, atLeastOnce()).flush();
         }
     }
 
@@ -477,10 +485,9 @@ public class DeleteRowServletTest {
             u.setEmail("user@example.com");
             when(mock.doRetrieveByEmail("user@example.com")).thenReturn(u);
 
-            // Utente con dataNascita null per il JSON
             Utente u2 = new Utente();
             u2.setEmail("user2@example.com");
-            u2.setDataNascita(null); // Explicitly null
+            u2.setDataNascita(null);
             List<Utente> list = new ArrayList<>();
             list.add(u2);
             when(mock.doRetrieveAll()).thenReturn(list);
@@ -489,7 +496,8 @@ public class DeleteRowServletTest {
 
             verify(response).getWriter();
             String json = getJsonOutput();
-            assertTrue(json.contains("\"dataDiNascita\":\"\"")); // Verifica che sia gestito come stringa vuota
+            assertTrue(json.contains("\"dataDiNascita\":\"\""));
+            verify(printWriter, atLeastOnce()).flush();
         }
     }
 
@@ -560,7 +568,7 @@ public class DeleteRowServletTest {
     @DisplayName("Cancellazione 'ordine' con PK non valida -> Invia 400")
     void doGet_deleteOrdine_invalidPK_sendsError() throws ServletException, IOException {
         when(request.getParameter("tableName")).thenReturn("ordine");
-        when(request.getParameter("primaryKey")).thenReturn("0"); // Invalid ID
+        when(request.getParameter("primaryKey")).thenReturn("0");
         when(session.getAttribute("Utente")).thenReturn(mock(Utente.class));
 
         servlet.doGet(request, response);
@@ -572,7 +580,7 @@ public class DeleteRowServletTest {
     @DisplayName("Cancellazione 'gusto' con PK non valida -> Invia 400")
     void doGet_deleteGusto_invalidPK_sendsError() throws ServletException, IOException {
         when(request.getParameter("tableName")).thenReturn("gusto");
-        when(request.getParameter("primaryKey")).thenReturn("0"); // Invalid ID
+        when(request.getParameter("primaryKey")).thenReturn("0");
         when(session.getAttribute("Utente")).thenReturn(mock(Utente.class));
 
         servlet.doGet(request, response);
@@ -584,7 +592,7 @@ public class DeleteRowServletTest {
     @DisplayName("Cancellazione 'variante' con PK non valida -> Invia 400")
     void doGet_deleteVariante_invalidPK_sendsError() throws ServletException, IOException {
         when(request.getParameter("tableName")).thenReturn("variante");
-        when(request.getParameter("primaryKey")).thenReturn("0"); // Invalid ID
+        when(request.getParameter("primaryKey")).thenReturn("0");
         when(session.getAttribute("Utente")).thenReturn(mock(Utente.class));
 
         servlet.doGet(request, response);

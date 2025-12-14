@@ -1,6 +1,8 @@
 package controller.Admin;
 
 import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -32,6 +34,8 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
@@ -46,13 +50,34 @@ public class EditRowServletTest {
     private HttpServletRequest request;
     private HttpServletResponse response;
     private RequestDispatcher dispatcher;
+    private ServletConfig servletConfig;
+    private ServletContext servletContext;
+
+    private final java.io.ByteArrayOutputStream errContent = new java.io.ByteArrayOutputStream();
+    private final java.io.ByteArrayOutputStream outContent = new java.io.ByteArrayOutputStream();
+    private final java.io.PrintStream originalErr = System.err;
+    private final java.io.PrintStream originalOut = System.out;
 
     @BeforeEach
-    void setup() {
+    void setup() throws ServletException {
+        System.setErr(new java.io.PrintStream(errContent));
+        System.setOut(new java.io.PrintStream(outContent));
         servlet = new editRowServlet();
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         dispatcher = mock(RequestDispatcher.class);
+        servletConfig = mock(ServletConfig.class);
+        servletContext = mock(ServletContext.class);
+
+        when(servletConfig.getServletContext()).thenReturn(servletContext);
+        when(servletConfig.getServletName()).thenReturn("editRowServlet");
+        servlet.init(servletConfig);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreStreams() {
+        System.setErr(originalErr);
+        System.setOut(originalOut);
     }
 
     /**
@@ -96,6 +121,32 @@ public class EditRowServletTest {
         verify(response).sendError(eq(HttpServletResponse.SC_METHOD_NOT_ALLOWED), anyString());
     }
 
+    @Test
+    @DisplayName("Eccezione in doGet -> Logga errore e invia 500 se non commesso")
+    void doGet_exception_logsAndSendsError() throws ServletException, IOException {
+        editRowServlet spyServlet = spy(new editRowServlet());
+        spyServlet.init(servletConfig);
+
+        try {
+            spyServlet.doGet(null, response);
+        } catch (Exception e) {
+            // ignore
+        }
+        verify(servletContext, atLeastOnce()).log(anyString(), any(Throwable.class));
+        verify(response).sendError(eq(HttpServletResponse.SC_INTERNAL_SERVER_ERROR), anyString());
+    }
+
+    @Test
+    @DisplayName("Eccezione in doPost -> Logga errore e invia 500")
+    void doPost_exception_logsAndSendsError() throws ServletException, IOException {
+        when(request.getParameter("tableName")).thenThrow(new RuntimeException("Test Error"));
+
+        servlet.doPost(request, response);
+
+        verify(servletContext).log(eq("editRowServlet: Errore in editRowServlet doPost"), any(RuntimeException.class));
+        verify(response).sendError(eq(HttpServletResponse.SC_INTERNAL_SERVER_ERROR), anyString());
+    }
+
     // --- Test 2: Verifica Correzione Faglie (Input non validi) ---
 
     @Test
@@ -106,7 +157,6 @@ public class EditRowServletTest {
 
         servlet.doPost(request, response);
 
-        // Verifica che la correzione (controllo di guardia) invii un errore
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST,
                 "Parametri 'tableName' o 'primaryKey' mancanti.");
         verify(dispatcher, never()).forward(any(), any());
@@ -128,40 +178,34 @@ public class EditRowServletTest {
     @Test
     @DisplayName("Input non numerico (Prodotto) -> Gestito e invia 400")
     void doPost_editProdotto_nonNumeric_sendsError() throws ServletException, IOException {
-        setupValidProdottoParams(); // Imposta tutti i parametri validi
+        setupValidProdottoParams();
         when(request.getParameter("tableName")).thenReturn("prodotto");
         when(request.getParameter("primaryKey")).thenReturn("P1");
-        when(request.getParameter("calorie")).thenReturn("abc"); // ... tranne questo
+        when(request.getParameter("calorie")).thenReturn("abc");
 
-        // Il DAO non verrà mai creato perché il try-catch nel metodo corretto fallisce
         try (MockedConstruction<ProdottoDAO> dao = mockConstruction(ProdottoDAO.class)) {
-
             servlet.doPost(request, response);
-
-            // Il metodo 'editProdotto' (corretto) cattura NFE, restituisce false.
-            // La servlet quindi invia un errore.
             verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
             verify(dispatcher, never()).forward(any(), any());
-            assertEquals(0, dao.constructed().size()); // DAO non creato
+            assertEquals(0, dao.constructed().size());
+            assertFalse(errContent.toString().isEmpty(), "Should print stack trace to stderr");
         }
     }
 
     @Test
     @DisplayName("Input data non valido (Utente) -> Gestito e invia 400")
     void doPost_editUtente_invalidDate_sendsError() throws ServletException, IOException {
-        setupValidUtenteParams(); // Imposta tutti i parametri validi
+        setupValidUtenteParams();
         when(request.getParameter("tableName")).thenReturn("utente");
         when(request.getParameter("primaryKey")).thenReturn("old@email.com");
-        when(request.getParameter("dataDiNascita")).thenReturn("data-sbagliata"); // ... tranne questo
+        when(request.getParameter("dataDiNascita")).thenReturn("data-sbagliata");
 
         try (MockedConstruction<UtenteDAO> dao = mockConstruction(UtenteDAO.class)) {
-
             servlet.doPost(request, response);
-
-            // 'editUtente' cattura ParseException, restituisce false. Servlet invia errore.
             verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
             verify(dispatcher, never()).forward(any(), any());
-            assertEquals(0, dao.constructed().size()); // DAO non creato
+            assertEquals(0, dao.constructed().size());
+            assertFalse(errContent.toString().isEmpty(), "Should print stack trace to stderr");
         }
     }
 
@@ -174,35 +218,35 @@ public class EditRowServletTest {
         when(request.getParameter("tableName")).thenReturn("utente");
         when(request.getParameter("primaryKey")).thenReturn("old@email.com");
 
-        // Stub del dispatcher per il forward
         when(request.getRequestDispatcher("showTable?tableName=utente")).thenReturn(dispatcher);
 
         try (MockedConstruction<UtenteDAO> dao = mockConstruction(UtenteDAO.class, (mock, ctx) -> {
-            // Stub: doUpdate non fa nulla
             doNothing().when(mock).doUpdateCustomer(any(Utente.class), anyString());
         })) {
 
             servlet.doPost(request, response);
 
-            // Verifica che il DAO sia stato creato e chiamato
             UtenteDAO mockDao = dao.constructed().get(0);
-
-            // Cattura l'oggetto Utente passato al DAO
             ArgumentCaptor<Utente> utenteCaptor = ArgumentCaptor.forClass(Utente.class);
             verify(mockDao).doUpdateCustomer(utenteCaptor.capture(), eq("old@email.com"));
 
-            // Verifica che l'oggetto Utente catturato abbia i dati corretti
             Utente savedUser = utenteCaptor.getValue();
+            // KILL MUTANTS: Verify ALL setters
             assertEquals("Mario", savedUser.getNome());
+            assertEquals("Rossi", savedUser.getCognome());
+            assertEquals("RSSMRA80A01H501U", savedUser.getCodiceFiscale());
             assertEquals("user@example.com", savedUser.getEmail());
+            assertEquals("Via Roma 1", savedUser.getIndirizzo());
+            assertEquals("3331234567", savedUser.getTelefono());
 
-            // Verifica la data (per assicurarsi che il parsing sia corretto)
             Date expectedDate = new SimpleDateFormat("yyyy-MM-dd").parse("1980-01-01");
             assertEquals(expectedDate, savedUser.getDataNascita());
 
-            // Verifica che il forward sia avvenuto
             verify(dispatcher).forward(request, response);
             verify(response, never()).sendError(anyInt(), anyString());
+
+            // Validate stdout output
+            assertTrue(outContent.toString().contains("tableName: utente"), "Stdout must contain 'tableName: utente'");
         }
     }
 
@@ -211,19 +255,15 @@ public class EditRowServletTest {
     @Test
     @DisplayName("Modifica 'utente' (Sad Path) -> 'isValid' false -> Invia 400")
     void doPost_editUtente_invalidParam_sendsError() throws ServletException, IOException {
-        setupValidUtenteParams(); // Imposta tutti i parametri validi
-        when(request.getParameter("nome")).thenReturn(""); // ... tranne questo (isBlank)
+        setupValidUtenteParams();
+        when(request.getParameter("nome")).thenReturn(""); // isBlank
         when(request.getParameter("tableName")).thenReturn("utente");
         when(request.getParameter("primaryKey")).thenReturn("old@email.com");
 
         try (MockedConstruction<UtenteDAO> dao = mockConstruction(UtenteDAO.class)) {
-
             servlet.doPost(request, response);
-
-            // Il metodo 'isValid' restituisce false, 'editUtente' restituisce false.
             verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
             verify(dispatcher, never()).forward(any(), any());
-            // Il DAO non deve essere creato perché il controllo fallisce prima
             assertEquals(0, dao.constructed().size());
         }
     }
@@ -245,7 +285,20 @@ public class EditRowServletTest {
             servlet.doPost(request, response);
 
             ProdottoDAO mockDao = dao.constructed().get(0);
-            verify(mockDao).updateProduct(any(Prodotto.class), eq("P1"));
+            ArgumentCaptor<Prodotto> captor = ArgumentCaptor.forClass(Prodotto.class);
+            verify(mockDao).updateProduct(captor.capture(), eq("P1"));
+
+            Prodotto p = captor.getValue();
+            assertEquals("P1", p.getIdProdotto());
+            assertEquals("Proteine", p.getNome());
+            assertEquals("Descrizione test", p.getDescrizione());
+            assertEquals("Integratori", p.getCategoria());
+            assertEquals("img.png", p.getImmagine());
+            assertEquals(100, p.getCalorie());
+            assertEquals(10, p.getCarboidrati());
+            assertEquals(80, p.getProteine());
+            assertEquals(5, p.getGrassi());
+
             verify(dispatcher).forward(request, response);
         }
     }
@@ -263,7 +316,7 @@ public class EditRowServletTest {
         when(request.getParameter("idConfezione")).thenReturn("1");
         when(request.getParameter("prezzo")).thenReturn("10.5");
         when(request.getParameter("quantity")).thenReturn("100");
-        when(request.getParameter("sconto")).thenReturn("0");
+        when(request.getParameter("sconto")).thenReturn("10"); // Non-default to kill mutant
         when(request.getParameter("evidenza")).thenReturn("1");
 
         when(request.getRequestDispatcher("showTable?tableName=variante")).thenReturn(dispatcher);
@@ -273,7 +326,19 @@ public class EditRowServletTest {
         })) {
             servlet.doPost(request, response);
 
-            verify(dao.constructed().get(0)).updateVariante(any(Variante.class), eq(1));
+            ArgumentCaptor<Variante> captor = ArgumentCaptor.forClass(Variante.class);
+            verify(dao.constructed().get(0)).updateVariante(captor.capture(), eq(1));
+
+            Variante v = captor.getValue();
+            assertEquals(1, v.getIdVariante());
+            assertEquals("P1", v.getIdProdotto());
+            assertEquals(1, v.getIdGusto());
+            assertEquals(1, v.getIdConfezione());
+            assertEquals(10.5f, v.getPrezzo());
+            assertEquals(100, v.getQuantita());
+            assertEquals(10, v.getSconto()); // Verified non-default
+            assertEquals(true, v.isEvidenza());
+
             verify(dispatcher).forward(request, response);
         }
     }
@@ -294,19 +359,15 @@ public class EditRowServletTest {
 
         servlet.doPost(request, response);
 
-        // Since editVariante does not catch NumberFormatException, this might fail with
-        // an exception
-        // But let's see if we can catch it or if the servlet should be fixed.
-        // For now, assuming the test expects 400, but it might crash.
-        // If it crashes, we should fix the servlet.
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace to stderr");
     }
 
     // --- Test 7: Ordine ---
 
     @Test
     @DisplayName("Modifica 'ordine' (Happy Path) -> Chiama DAO e fa forward")
-    void doPost_editOrdine_happyPath_forwards() throws ServletException, IOException {
+    void doPost_editOrdine_happyPath_forwards() throws ServletException, IOException, ParseException {
         when(request.getParameter("tableName")).thenReturn("ordine");
         when(request.getParameter("primaryKey")).thenReturn("1");
         when(request.getParameter("idOrdine")).thenReturn("1");
@@ -322,7 +383,16 @@ public class EditRowServletTest {
         })) {
             servlet.doPost(request, response);
 
-            verify(dao.constructed().get(0)).doUpdateOrder(any(Ordine.class), eq(1));
+            ArgumentCaptor<Ordine> captor = ArgumentCaptor.forClass(Ordine.class);
+            verify(dao.constructed().get(0)).doUpdateOrder(captor.capture(), eq(1));
+
+            Ordine o = captor.getValue();
+            assertEquals(1, o.getIdOrdine());
+            assertEquals("user@example.com", o.getEmailUtente());
+            assertEquals("Spedito", o.getStato());
+            assertEquals(50.0f, o.getTotale());
+            assertEquals(new SimpleDateFormat("yyyy-MM-dd").parse("2023-01-01"), o.getDataOrdine());
+
             verify(dispatcher).forward(request, response);
         }
     }
@@ -341,6 +411,29 @@ public class EditRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+    }
+
+    @Test
+    @DisplayName("Modifica 'ordine' (Boundary: Zero Total) -> Happy Path")
+    void doPost_editOrdine_zeroTotal_updates() throws ServletException, IOException {
+        when(request.getParameter("tableName")).thenReturn("ordine");
+        when(request.getParameter("primaryKey")).thenReturn("1");
+        when(request.getParameter("idOrdine")).thenReturn("1");
+        when(request.getParameter("emailUtente")).thenReturn("user@example.com");
+        when(request.getParameter("data")).thenReturn("2023-01-01");
+        when(request.getParameter("stato")).thenReturn("Spedito");
+        when(request.getParameter("totale")).thenReturn("0.0");
+
+        when(request.getRequestDispatcher("showTable?tableName=ordine")).thenReturn(dispatcher);
+
+        try (MockedConstruction<OrdineDao> dao = mockConstruction(OrdineDao.class, (mock, ctx) -> {
+            doNothing().when(mock).doUpdateOrder(any(Ordine.class), anyInt());
+        })) {
+            servlet.doPost(request, response);
+
+            verify(dispatcher).forward(request, response);
+            verify(response, never()).sendError(anyInt(), anyString());
+        }
     }
 
     // --- Test 8: DettaglioOrdine ---
@@ -362,8 +455,15 @@ public class EditRowServletTest {
         })) {
             servlet.doPost(request, response);
 
-            verify(dao.constructed().get(0)).doUpdateDettaglioOrdine(any(DettaglioOrdine.class), eq(1), eq("P1"),
-                    eq(1));
+            ArgumentCaptor<DettaglioOrdine> captor = ArgumentCaptor.forClass(DettaglioOrdine.class);
+            verify(dao.constructed().get(0)).doUpdateDettaglioOrdine(captor.capture(), eq(1), eq("P1"), eq(1));
+
+            DettaglioOrdine details = captor.getValue();
+            assertEquals(1, details.getIdOrdine());
+            assertEquals("P1", details.getIdProdotto());
+            assertEquals(1, details.getIdVariante());
+            assertEquals(5, details.getQuantita());
+
             verify(dispatcher).forward(request, response);
         }
     }
@@ -383,6 +483,28 @@ public class EditRowServletTest {
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
     }
 
+    @Test
+    @DisplayName("Modifica 'dettaglioOrdine' (Boundary: Zero Quantity) -> Happy Path")
+    void doPost_editDettaglioOrdine_zeroQuantity_updates() throws ServletException, IOException {
+        when(request.getParameter("tableName")).thenReturn("dettaglioOrdine");
+        when(request.getParameter("primaryKey")).thenReturn("1, P1, 1");
+        when(request.getParameter("idOrdine")).thenReturn("1");
+        when(request.getParameter("idVariante")).thenReturn("1");
+        when(request.getParameter("idProdotto")).thenReturn("P1");
+        when(request.getParameter("quantity")).thenReturn("0");
+
+        when(request.getRequestDispatcher("showTable?tableName=dettaglioOrdine")).thenReturn(dispatcher);
+
+        try (MockedConstruction<DettaglioOrdineDAO> dao = mockConstruction(DettaglioOrdineDAO.class, (mock, ctx) -> {
+            doNothing().when(mock).doUpdateDettaglioOrdine(any(DettaglioOrdine.class), anyInt(), anyString(), anyInt());
+        })) {
+            servlet.doPost(request, response);
+
+            verify(dispatcher).forward(request, response);
+            verify(response, never()).sendError(anyInt(), anyString());
+        }
+    }
+
     // --- Test 9: Gusto ---
 
     @Test
@@ -400,7 +522,13 @@ public class EditRowServletTest {
         })) {
             servlet.doPost(request, response);
 
-            verify(dao.constructed().get(0)).updateGusto(any(Gusto.class), eq(1));
+            ArgumentCaptor<Gusto> captor = ArgumentCaptor.forClass(Gusto.class);
+            verify(dao.constructed().get(0)).updateGusto(captor.capture(), eq(1));
+
+            Gusto g = captor.getValue();
+            assertEquals(1, g.getIdGusto());
+            assertEquals("Cioccolato", g.getNomeGusto());
+
             verify(dispatcher).forward(request, response);
         }
     }
@@ -422,7 +550,13 @@ public class EditRowServletTest {
         })) {
             servlet.doPost(request, response);
 
-            verify(dao.constructed().get(0)).doUpdateConfezione(any(Confezione.class), eq(1));
+            ArgumentCaptor<Confezione> captor = ArgumentCaptor.forClass(Confezione.class);
+            verify(dao.constructed().get(0)).doUpdateConfezione(captor.capture(), eq(1));
+
+            Confezione c = captor.getValue();
+            assertEquals(1, c.getIdConfezione());
+            assertEquals(500, c.getPeso());
+
             verify(dispatcher).forward(request, response);
         }
     }
@@ -448,7 +582,6 @@ public class EditRowServletTest {
 
         servlet.doPost(request, response);
 
-        // Lo switch va in 'default'
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid table name.");
         verify(dispatcher, never()).forward(any(), any());
     }
@@ -469,6 +602,7 @@ public class EditRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace");
     }
 
     @Test
@@ -485,6 +619,7 @@ public class EditRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace");
     }
 
     @Test
@@ -501,6 +636,7 @@ public class EditRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace");
     }
 
     @Test
@@ -516,14 +652,14 @@ public class EditRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace");
     }
 
     @Test
     @DisplayName("Modifica 'dettaglioOrdine' (Sad Path: Malformed PK) -> Invia 400")
     void doPost_editDettaglioOrdine_malformedPK_sendsError() throws ServletException, IOException {
         when(request.getParameter("tableName")).thenReturn("dettaglioOrdine");
-        when(request.getParameter("primaryKey")).thenReturn("1, P1"); // Missing 3rd part ->
-                                                                      // ArrayIndexOutOfBoundsException
+        when(request.getParameter("primaryKey")).thenReturn("1, P1"); // Missing 3rd part -> ArrayIndexOutOfBounds
         when(request.getParameter("idOrdine")).thenReturn("1");
         when(request.getParameter("idVariante")).thenReturn("1");
         when(request.getParameter("idProdotto")).thenReturn("P1");
@@ -545,6 +681,7 @@ public class EditRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace");
     }
 
     @Test
@@ -558,6 +695,7 @@ public class EditRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace");
     }
 
     // --- Test 12: Primary Key Parsing Exceptions (New Coverage) ---
@@ -576,6 +714,7 @@ public class EditRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace");
     }
 
     @Test
@@ -589,6 +728,7 @@ public class EditRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace");
     }
 
     @Test
@@ -602,6 +742,7 @@ public class EditRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace");
     }
 
     @Test
@@ -621,9 +762,8 @@ public class EditRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace");
     }
-
-    // --- Test 13: Boolean Logic & Edge Cases (New Coverage) ---
 
     @Test
     @DisplayName("tableName vuoto (blank) -> Gestito e invia 400")
@@ -675,5 +815,6 @@ public class EditRowServletTest {
         servlet.doPost(request, response);
 
         verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid input data.");
+        assertFalse(errContent.toString().isEmpty(), "Should print stack trace");
     }
 }

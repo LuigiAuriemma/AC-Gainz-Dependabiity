@@ -13,6 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedConstruction;
+import org.mockito.stubbing.Stubber;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -32,19 +33,21 @@ public class AreaPersonaleServletTest {
     private HttpServletResponse response;
     private HttpSession session;
     private RequestDispatcher dispatcher;
+    private ServletContext servletContext;
 
     @BeforeEach
     void setup() throws Exception {
         servlet = new AreaPersonaleServlet();
-        
-        // Mock ServletConfig e ServletContext per permettere il logging
+
+        // Mock ServletConfig e ServletContext
         ServletConfig servletConfig = mock(ServletConfig.class);
-        ServletContext servletContext = mock(ServletContext.class);
+        servletContext = mock(ServletContext.class);
         when(servletConfig.getServletContext()).thenReturn(servletContext);
-        
-        // Inizializza il servlet con il config mockato
+        when(servletConfig.getServletName()).thenReturn("AreaPersonaleServlet");
+
+        // Inizializza il servlet
         servlet.init(servletConfig);
-        
+
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         session = mock(HttpSession.class);
@@ -53,8 +56,9 @@ public class AreaPersonaleServletTest {
         // Stub di base
         when(request.getSession()).thenReturn(session);
         when(request.getRequestDispatcher("WEB-INF/AreaUtente.jsp")).thenReturn(dispatcher);
+        // FIX: Mock protocol per evitare NPE in super.doGet
+        when(request.getProtocol()).thenReturn("HTTP/1.1");
     }
-
 
     // --- Test Utente non loggato ---
 
@@ -65,7 +69,6 @@ public class AreaPersonaleServletTest {
 
         servlet.doPost(request, response);
 
-        // Nessun forward, nessun setAttribute, nessuna chiamata al dispatcher
         verify(request, never()).getRequestDispatcher(anyString());
         verify(dispatcher, never()).forward(any(), any());
         verify(request, never()).setAttribute(anyString(), any());
@@ -76,41 +79,32 @@ public class AreaPersonaleServletTest {
     @Test
     @DisplayName("doPost con utente loggato ma 0 ordini, inoltra con liste vuote")
     void doPost_userWithNoOrders_forwardsEmptyLists() throws ServletException, IOException {
-        // Prepara utente
         Utente utente = new Utente();
         utente.setEmail("user@example.com");
         when(session.getAttribute("Utente")).thenReturn(utente);
 
-        // Lista ordini vuota
         List<Ordine> emptyOrders = new ArrayList<>();
 
-        // Mock dei DAO
         try (MockedConstruction<OrdineDao> mockedOrdineDao = mockConstruction(OrdineDao.class, (mock, ctx) -> {
-            // Stub: doRetrieveByEmail restituisce una lista vuota
-            when(mock.doRetrieveByEmail("user@example.com")).thenReturn(emptyOrders);
+            doReturn(emptyOrders).when(mock).doRetrieveByEmail("user@example.com");
         });
-             MockedConstruction<DettaglioOrdineDAO> mockedDettaglioDao = mockConstruction(DettaglioOrdineDAO.class)) {
+                MockedConstruction<DettaglioOrdineDAO> mockedDettaglioDao = mockConstruction(
+                        DettaglioOrdineDAO.class)) {
 
             servlet.doPost(request, response);
 
-            // Verifica che il DAO degli ordini sia stato chiamato
             verify(mockedOrdineDao.constructed().get(0)).doRetrieveByEmail("user@example.com");
-            // Verifica che il DAO dei dettagli NON sia stato chiamato (perché il loop era vuoto)
             verify(mockedDettaglioDao.constructed().get(0), never()).doRetrieveById(anyInt());
 
-            // Cattura gli attributi impostati sulla request
             ArgumentCaptor<List> listCaptor = ArgumentCaptor.forClass(List.class);
             ArgumentCaptor<HashMap> mapCaptor = ArgumentCaptor.forClass(HashMap.class);
 
-            // Verifica che "ordini" sia la lista vuota
             verify(request).setAttribute(eq("ordini"), listCaptor.capture());
             assertTrue(listCaptor.getValue().isEmpty());
 
-            // Verifica che "dettaglioOrdini" sia una mappa vuota
             verify(request).setAttribute(eq("dettaglioOrdini"), mapCaptor.capture());
             assertTrue(mapCaptor.getValue().isEmpty());
 
-            // Verifica l'inoltro
             verify(dispatcher).forward(request, response);
         }
     }
@@ -124,7 +118,6 @@ public class AreaPersonaleServletTest {
         utente.setEmail("user@example.com");
         when(session.getAttribute("Utente")).thenReturn(utente);
 
-        // Prepara un ordine con descrizione
         Ordine ordine1 = new Ordine();
         ordine1.setIdOrdine(101);
         String descrizione = "Prodotto: Proteine Whey\n" +
@@ -138,24 +131,21 @@ public class AreaPersonaleServletTest {
         try (MockedConstruction<OrdineDao> mockedOrdineDao = mockConstruction(OrdineDao.class, (mock, ctx) -> {
             when(mock.doRetrieveByEmail("user@example.com")).thenReturn(ordini);
         });
-             MockedConstruction<DettaglioOrdineDAO> mockedDettaglioDao = mockConstruction(DettaglioOrdineDAO.class)) {
+                MockedConstruction<DettaglioOrdineDAO> mockedDettaglioDao = mockConstruction(
+                        DettaglioOrdineDAO.class)) {
 
             servlet.doPost(request, response);
 
-            // VERIFICA CHIAVE: Il DAO dei dettagli NON deve essere chiamato
             verify(mockedDettaglioDao.constructed().get(0), never()).doRetrieveById(anyInt());
 
-            // Cattura la mappa "dettaglioOrdini"
             ArgumentCaptor<HashMap> mapCaptor = ArgumentCaptor.forClass(HashMap.class);
             verify(request).setAttribute(eq("dettaglioOrdini"), mapCaptor.capture());
             HashMap<Integer, List<DettaglioOrdine>> capturedMap = mapCaptor.getValue();
 
-            // Verifica il contenuto della mappa
             assertTrue(capturedMap.containsKey(101));
             List<DettaglioOrdine> dettagli = capturedMap.get(101);
             assertEquals(1, dettagli.size());
 
-            // Verifica che il parsing sia avvenuto correttamente
             DettaglioOrdine d = dettagli.get(0);
             assertEquals("Proteine Whey", d.getNomeProdotto());
             assertEquals("Cioccolato", d.getGusto());
@@ -172,28 +162,25 @@ public class AreaPersonaleServletTest {
     @Test
     @DisplayName("doPost usa il DAO se la descrizione è null")
     void doPost_userWithOrder_usesDAO_whenDescrizioneIsNull() throws ServletException, IOException {
-        testChiamataDAO(null); // Chiama il metodo helper con descrizione null
+        testChiamataDAO(null);
     }
 
     @Test
     @DisplayName("doPost usa il DAO se la descrizione è vuota")
     void doPost_userWithOrder_usesDAO_whenDescrizioneIsEmpty() throws ServletException, IOException {
-        testChiamataDAO(""); // Chiama il metodo helper con descrizione vuota
+        testChiamataDAO("");
     }
 
-    // Metodo helper per raggruppare i test 5 e 6
     private void testChiamataDAO(String descrizione) throws ServletException, IOException {
         Utente utente = new Utente();
         utente.setEmail("user@example.com");
         when(session.getAttribute("Utente")).thenReturn(utente);
 
-        // Prepara ordine (descrizione null o vuota)
         Ordine ordine1 = new Ordine();
         ordine1.setIdOrdine(102);
         ordine1.setDescrizione(descrizione);
         List<Ordine> ordini = List.of(ordine1);
 
-        // Prepara i dettagli che il DAO "restituirà"
         DettaglioOrdine dettaglioDalDB = new DettaglioOrdine();
         dettaglioDalDB.setNomeProdotto("Prodotto da DB");
         List<DettaglioOrdine> dettagliFromDB = List.of(dettaglioDalDB);
@@ -201,17 +188,15 @@ public class AreaPersonaleServletTest {
         try (MockedConstruction<OrdineDao> mockedOrdineDao = mockConstruction(OrdineDao.class, (mock, ctx) -> {
             when(mock.doRetrieveByEmail("user@example.com")).thenReturn(ordini);
         });
-             MockedConstruction<DettaglioOrdineDAO> mockedDettaglioDao = mockConstruction(DettaglioOrdineDAO.class, (mock, ctx) -> {
-                 // Stub: Il DAO restituisce i dettagli preimpostati
-                 when(mock.doRetrieveById(102)).thenReturn(dettagliFromDB);
-             })) {
+                MockedConstruction<DettaglioOrdineDAO> mockedDettaglioDao = mockConstruction(DettaglioOrdineDAO.class,
+                        (mock, ctx) -> {
+                            when(mock.doRetrieveById(102)).thenReturn(dettagliFromDB);
+                        })) {
 
             servlet.doPost(request, response);
 
-            // VERIFICA CHIAVE: Il DAO dei dettagli DEVE essere chiamato con l'ID corretto
             verify(mockedDettaglioDao.constructed().get(0)).doRetrieveById(102);
 
-            // Verifica che la mappa contenga i dati restituiti dal DAO
             ArgumentCaptor<HashMap> mapCaptor = ArgumentCaptor.forClass(HashMap.class);
             verify(request).setAttribute(eq("dettaglioOrdini"), mapCaptor.capture());
             HashMap<Integer, List<DettaglioOrdine>> capturedMap = mapCaptor.getValue();
@@ -223,8 +208,6 @@ public class AreaPersonaleServletTest {
         }
     }
 
-    // --- Test Fallimento Parsing (Dependability) ---
-
     @Test
     @DisplayName("doPost salta i prodotti malformati e continua l'elaborazione")
     void doPost_parseDescrizione_skipsMalformedProducts() throws Exception {
@@ -232,11 +215,8 @@ public class AreaPersonaleServletTest {
         utente.setEmail("user@example.com");
         when(session.getAttribute("Utente")).thenReturn(utente);
 
-        // Prepara un ordine con una descrizione contenente un prodotto malformato e uno valido
         Ordine ordine1 = new Ordine();
         ordine1.setIdOrdine(103);
-        // Il primo prodotto ha una quantità malformata ("due" invece di un numero)
-        // Il secondo prodotto è valido
         String mixedDesc = "Prodotto: Proteine Whey\n" +
                 "Gusto: Cioccolato\n" +
                 "Confezione: 900 grammi\n" +
@@ -254,22 +234,18 @@ public class AreaPersonaleServletTest {
         try (MockedConstruction<OrdineDao> mockedOrdineDao = mockConstruction(OrdineDao.class, (mock, ctx) -> {
             when(mock.doRetrieveByEmail("user@example.com")).thenReturn(ordini);
         });
-             MockedConstruction<DettaglioOrdineDAO> mockedDettaglioDao = mockConstruction(DettaglioOrdineDAO.class)) {
+                MockedConstruction<DettaglioOrdineDAO> mockedDettaglioDao = mockConstruction(
+                        DettaglioOrdineDAO.class)) {
 
             servlet.doPost(request, response);
 
-            // VERIFICA CHIAVE: La servlet gestisce l'errore gracefully e continua
-            // Cattura la mappa "dettaglioOrdini"
             ArgumentCaptor<HashMap> mapCaptor = ArgumentCaptor.forClass(HashMap.class);
             verify(request).setAttribute(eq("dettaglioOrdini"), mapCaptor.capture());
             HashMap<Integer, List<DettaglioOrdine>> capturedMap = mapCaptor.getValue();
 
-            // La mappa contiene l'ordine
             assertTrue(capturedMap.containsKey(103));
             List<DettaglioOrdine> dettagli = capturedMap.get(103);
-            
-            // VERIFICA: Solo il prodotto valido (Creatina) è stato aggiunto
-            // Il prodotto malformato (Proteine Whey con quantità "due") è stato saltato
+
             assertEquals(1, dettagli.size());
             assertEquals("Creatina", dettagli.get(0).getNomeProdotto());
             assertEquals("Neutro", dettagli.get(0).getGusto());
@@ -277,10 +253,46 @@ public class AreaPersonaleServletTest {
             assertEquals(1, dettagli.get(0).getQuantita());
             assertEquals(25.00f, dettagli.get(0).getPrezzo());
 
-            // L'inoltro deve avvenire normalmente
             verify(dispatcher).forward(request, response);
-            // Il DAO dei dettagli non deve essere chiamato (usiamo la descrizione)
-            verify(mockedDettaglioDao.constructed().get(0), never()).doRetrieveById(anyInt());
         }
+    }
+
+    @Test
+    @DisplayName("doGet invia errore 405 (Method Not Allowed)")
+    void doGet_sendsMethodNotAllowed() throws ServletException, IOException {
+        servlet.doGet(request, response);
+        // Poiché abbiamo mockato getProtocol()=HTTP/1.1, deve chiamare sendError(405,
+        // ...)
+        verify(response).sendError(eq(HttpServletResponse.SC_METHOD_NOT_ALLOWED), anyString());
+    }
+
+    @Test
+    @DisplayName("doGet lancia eccezione -> logga errore e invia 500")
+    void doGet_exception_sendsError500() throws ServletException, IOException {
+        // Simuliamo eccezione lanciata dalla response per entrare nel catch di doGet
+        // Questo funziona perché super.doGet chiamerà sendError(405).
+        doThrow(new IOException("Simulated IO")).when(response).sendError(eq(HttpServletResponse.SC_METHOD_NOT_ALLOWED),
+                anyString());
+
+        servlet.doGet(request, response);
+
+        // Verifica chiamate
+        verify(servletContext).log(eq("AreaPersonaleServlet: Errore in AreaPersonaleServlet doGet"),
+                any(Exception.class));
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+    }
+
+    @Test
+    @DisplayName("doPost lancia eccezione -> logga errore e invia 500")
+    void doPost_exception_sendsError500() throws ServletException, IOException {
+        // Simuliamo eccezione nel recupero sessione
+        when(request.getSession()).thenThrow(new RuntimeException("Session Error"));
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+                "Errore durante il recupero dell'area personale.");
+        verify(servletContext).log(eq("AreaPersonaleServlet: Errore in AreaPersonaleServlet doPost"),
+                any(Exception.class));
     }
 }

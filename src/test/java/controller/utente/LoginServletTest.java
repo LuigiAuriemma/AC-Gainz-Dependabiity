@@ -1,6 +1,8 @@
 package controller.utente;
 
 import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -28,14 +30,22 @@ public class LoginServletTest {
     private HttpServletResponse response;
     private HttpSession session;
     private RequestDispatcher dispatcher;
+    private ServletContext context;
 
     @BeforeEach
-    void setup() {
+    void setup() throws ServletException {
         servlet = new LoginServlet();
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         session = mock(HttpSession.class);
         dispatcher = mock(RequestDispatcher.class);
+
+        // Init servlet with mocked config to support log() calls
+        ServletConfig config = mock(ServletConfig.class);
+        context = mock(ServletContext.class);
+        when(config.getServletContext()).thenReturn(context);
+        when(config.getServletName()).thenReturn("LoginServlet");
+        servlet.init(config);
 
         // usa un dispatcher unico per QUALSIASI JSP (Login.jsp, index.jsp, ecc.)
         when(request.getRequestDispatcher(anyString())).thenReturn(dispatcher);
@@ -48,7 +58,7 @@ public class LoginServletTest {
     }
 
     @Test
-    @DisplayName("Email non valida → forward a Login.jsp con attribute patternEmail")
+    @DisplayName("Email non valida → forward a Login.jsp con attribute patternEmail e rimozione attributo")
     void invalidEmail_forwardsWithError() throws Exception {
         when(request.getParameter("email")).thenReturn("not-an-email");
 
@@ -57,11 +67,12 @@ public class LoginServletTest {
         verify(request).setAttribute("patternEmail", "Pattern email non rispettato!");
         verify(request).getRequestDispatcher("Login.jsp");
         verify(dispatcher).forward(request, response);
+        verify(request).removeAttribute("patternEmail"); // Verify removal to kill mutant
         verify(response, never()).sendRedirect(anyString());
     }
 
     @Test
-    @DisplayName("Email non trovata → forward a Login.jsp con attribute userNotFound")
+    @DisplayName("Email non trovata → forward a Login.jsp con attribute userNotFound e rimozione attributo")
     void emailNotFound_forwardsWithError() throws Exception {
         try (MockedConstruction<UtenteDAO> mockUtenteDAO = mockConstruction(UtenteDAO.class, (mock, ctx) -> {
             when(mock.doRetrieveByEmail("user@example.com")).thenReturn(null);
@@ -71,12 +82,13 @@ public class LoginServletTest {
             verify(request).setAttribute("userNotFound", "Utente non registrato!");
             verify(request).getRequestDispatcher("Login.jsp");
             verify(dispatcher).forward(request, response);
+            verify(request).removeAttribute("userNotFound"); // Verify removal to kill mutant
             verify(response, never()).sendRedirect(anyString());
         }
     }
 
     @Test
-    @DisplayName("Password errata → forward a Login.jsp con attribute wrongPassword")
+    @DisplayName("Password errata → forward a Login.jsp con attribute wrongPassword e rimozione attributo")
     void wrongPassword_forwardsWithError() throws Exception {
         Utente dbUser = new Utente();
         dbUser.setEmail("user@example.com");
@@ -92,6 +104,7 @@ public class LoginServletTest {
             verify(request).setAttribute("wrongPassword", "Password errata!");
             verify(request).getRequestDispatcher("Login.jsp");
             verify(dispatcher).forward(request, response);
+            verify(request).removeAttribute("wrongPassword"); // Verify removal to kill mutant
             verify(response, never()).sendRedirect(anyString());
         }
     }
@@ -132,7 +145,7 @@ public class LoginServletTest {
     }
 
     @Test
-    @DisplayName("Password non valida (pattern) → forward a Login.jsp con attribute patternPassword")
+    @DisplayName("Password non valida (pattern) → forward a Login.jsp con attribute patternPassword e rimozione attributo")
     void invalidPasswordPattern_forwardsWithError() throws Exception {
         when(request.getParameter("password")).thenReturn("short"); // Password troppo corta/semplice
 
@@ -141,18 +154,24 @@ public class LoginServletTest {
         verify(request).setAttribute("patternPassword", "Pattern password non rispettato!");
         verify(request).getRequestDispatcher("Login.jsp");
         verify(dispatcher).forward(request, response);
+        verify(request).removeAttribute("patternPassword"); // Verify removal to kill mutant
         verify(response, never()).sendRedirect(anyString());
     }
 
     @Test
-    @DisplayName("SQLException durante il recupero utente → lancia RuntimeException")
-    void sqlException_throwsRuntimeException() throws Exception {
+    @DisplayName("SQLException durante il recupero utente → invia errore 500 e logga errore")
+    void sqlException_sendsError500() throws Exception {
         try (MockedConstruction<UtenteDAO> mockUtenteDAO = mockConstruction(UtenteDAO.class, (mock, ctx) -> {
             when(mock.doRetrieveByEmail(anyString())).thenReturn(new Utente()); // Email trovata
             when(mock.doRetrieveByEmailAndPassword(anyString(), anyString()))
                     .thenThrow(new java.sql.SQLException("DB Error"));
         })) {
-            assertThrows(RuntimeException.class, () -> servlet.doPost(request, response));
+            servlet.doPost(request, response);
+
+            verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore database.");
+
+            // KILL MUTANT: Verifica che venga loggato l'errore (riga 82)
+            verify(context).log(eq("LoginServlet: Errore SQL durante il login"), any(java.sql.SQLException.class));
         }
     }
 
@@ -241,12 +260,63 @@ public class LoginServletTest {
     }
 
     @Test
-    @DisplayName("doGet → esegue senza errori (chiama super.doGet)")
-    void doGet_executes() throws Exception {
-        // doGet chiama super.doGet che non fa nulla di particolare se non è
-        // sovrascritto per logica specifica
-        // o lanciare eccezioni se non supportato. Qui verifichiamo solo che non
-        // esploda.
+    @DisplayName("doGet → invia errore 405 (chiama super.doGet)")
+    void doGet_sendsMethodNotAllowed() throws Exception {
+        // Mock response per catturare sendError
+        // In HttpServlet.doGet, viene chiamato sendError(405)
         servlet.doGet(request, response);
+        verify(response).sendError(eq(HttpServletResponse.SC_METHOD_NOT_ALLOWED), anyString());
+    }
+
+    @Test
+    @DisplayName("doGet exception → invia errore 500 e logga errore")
+    void doGet_throwsException_sendsErrorSafe() throws Exception {
+        // Force super.doGet to throw exception by manipulating response
+        // or since we can't easily mock super.doGet, we trigger exception in
+        // response.sendError
+        // which happens inside super.doGet
+        doThrow(new IOException("Simulated IO Error in doGet")).when(response)
+                .sendError(eq(HttpServletResponse.SC_METHOD_NOT_ALLOWED), anyString());
+
+        servlet.doGet(request, response);
+
+        // Verify catch block execution
+        verify(context).log(eq("LoginServlet: Errore in LoginServlet doGet"), any(Exception.class));
+        verify(response).sendError(eq(HttpServletResponse.SC_INTERNAL_SERVER_ERROR), eq("Errore interno."));
+    }
+
+    @Test
+    @DisplayName("Eccezione generica in doPost → invia errore 500 e logga errore")
+    void genericException_sendsError500() throws Exception {
+        when(request.getParameter("email")).thenThrow(new RuntimeException("Unexpected error"));
+
+        servlet.doPost(request, response);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante il login.");
+
+        // KILL MUTANT: Verifica che venga loggato l'errore critico (riga 136)
+        verify(context).log(eq("LoginServlet: Errore critico in LoginServlet doPost"), any(Exception.class));
+    }
+
+    @Test
+    @DisplayName("CarrelloDAO restituisce null → gestito come lista vuota")
+    void nullDbCart_handledAsEmptyList() throws Exception {
+        Utente x = new Utente();
+        x.setEmail("user@example.com");
+
+        try (MockedConstruction<UtenteDAO> mockUtenteDAO = mockConstruction(UtenteDAO.class, (mock, ctx) -> {
+            when(mock.doRetrieveByEmail("user@example.com")).thenReturn(x);
+            when(mock.doRetrieveByEmailAndPassword("user@example.com", "Password1!")).thenReturn(x);
+        });
+                MockedConstruction<CarrelloDAO> mockCarrelloDAO = mockConstruction(CarrelloDAO.class, (mock, ctx) -> {
+                    when(mock.doRetrieveCartItemsByUser("user@example.com")).thenReturn(null); // Return NULL
+                })) {
+
+            servlet.doPost(request, response);
+
+            // Se dbCart è null, viene inizializzato a new ArrayList()
+            // Il codice non deve esplodere e deve settare un carrello
+            verify(session).setAttribute(eq("cart"), anyList());
+        }
     }
 }

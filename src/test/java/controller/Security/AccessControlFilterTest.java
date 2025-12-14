@@ -13,6 +13,10 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import org.junit.jupiter.api.AfterEach;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 /**
@@ -77,10 +81,19 @@ public class AccessControlFilterTest {
     @DisplayName("👤 Test come Utente GUEST (non loggato)")
     class GuestTests {
 
+        private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
+        private final PrintStream originalOut = System.out;
+
         @BeforeEach
         void setupGuest() {
+            System.setOut(new PrintStream(outContent));
             // L'utente non è in sessione
             when(session.getAttribute("Utente")).thenReturn(null);
+        }
+
+        @AfterEach
+        void restoreStreams() {
+            System.setOut(originalOut);
         }
 
         @Test
@@ -89,6 +102,12 @@ public class AccessControlFilterTest {
             when(request.getServletPath()).thenReturn("/index.jsp");
             filter.doFilter(request, response, chain);
             assertPassedThrough();
+
+            // Verify System.out prints (Kills Mutants)
+            String output = outContent.toString();
+            // Expecting "false" (isAdmin) and "/index.jsp" (path)
+            assertTrue(output.contains("false"), "Should print isAdmin status (false)");
+            assertTrue(output.contains("/index.jsp"), "Should print request path");
         }
 
         @Test

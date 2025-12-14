@@ -50,14 +50,24 @@ class UtenteDAOTest {
             when(mockResultSet.getString("password")).thenReturn(password);
             when(mockResultSet.getString("nome")).thenReturn("Mario");
             when(mockResultSet.getString("cognome")).thenReturn("Rossi");
+            when(mockResultSet.getString("codice_fiscale")).thenReturn("CFMARIO");
+            when(mockResultSet.getDate("data_di_nascita")).thenReturn(new java.sql.Date(System.currentTimeMillis()));
+            when(mockResultSet.getString("indirizzo")).thenReturn("Via Verdi");
+            when(mockResultSet.getString("numero_di_cellulare")).thenReturn("333123456");
             when(mockResultSet.getBoolean("poteri")).thenReturn(false);
-            // ... altri campi se necessari
 
             Utente result = utenteDAO.doRetrieveByEmailAndPassword(email, password);
 
             assertNotNull(result);
             assertEquals("Mario", result.getNome());
             assertEquals(email, result.getEmail());
+            assertEquals(password, result.getPassword());
+            assertEquals("Rossi", result.getCognome());
+            assertEquals("CFMARIO", result.getCodiceFiscale());
+            assertEquals(new java.sql.Date(System.currentTimeMillis()).toString(), result.getDataNascita().toString());
+            assertEquals("Via Verdi", result.getIndirizzo());
+            assertEquals("333123456", result.getTelefono());
+            assertFalse(result.getPoteri());
 
             // Verifichiamo che i parametri siano stati settati correttamente nel
             // PreparedStatement
@@ -75,14 +85,49 @@ class UtenteDAOTest {
             when(mockResultSet.next()).thenReturn(false); // Nessun utente trovato
 
             Utente result = utenteDAO.doRetrieveByEmailAndPassword("wrong@email.com", "wrongpass");
-
             assertNull(result);
+        }
+    }
+
+    @Test
+    void doRetrieveByEmailAndPassword_SystemOutCapture() throws SQLException {
+        java.io.ByteArrayOutputStream outContent = new java.io.ByteArrayOutputStream();
+        java.io.PrintStream originalOut = System.out;
+        System.setOut(new java.io.PrintStream(outContent));
+
+        try {
+            String email = "test@example.com";
+            String password = "password123";
+
+            try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+                mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+                when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+                when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+                when(mockResultSet.next()).thenReturn(true);
+
+                // Minimal mock setup to avoid NPEs if DAO accesses result set
+                when(mockResultSet.getString("email")).thenReturn(email);
+                when(mockResultSet.getString("password")).thenReturn(password);
+                when(mockResultSet.getString("nome")).thenReturn("Mario");
+                when(mockResultSet.getString("cognome")).thenReturn("Rossi");
+                // ... other fields not strictly needed unless assertions require them, but we
+                // only check stdout here
+
+                utenteDAO.doRetrieveByEmailAndPassword(email, password);
+
+                String output = outContent.toString();
+                assertTrue(output.contains("Email: " + email));
+                assertTrue(output.contains("Password: " + password));
+            }
+        } finally {
+            System.setOut(originalOut);
         }
     }
 
     @Test
     void doRetrieveByEmail_Success() throws SQLException {
         String email = "test@example.com";
+        java.sql.Date birthDate = new java.sql.Date(System.currentTimeMillis());
 
         try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
             mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
@@ -91,12 +136,28 @@ class UtenteDAOTest {
             when(mockResultSet.next()).thenReturn(true, false); // Un risultato, poi fine
 
             when(mockResultSet.getString("email")).thenReturn(email);
+            when(mockResultSet.getString("password")).thenReturn("pass");
             when(mockResultSet.getString("nome")).thenReturn("Luigi");
+            when(mockResultSet.getString("cognome")).thenReturn("Verdi");
+            when(mockResultSet.getString("codice_fiscale")).thenReturn("CF123");
+            when(mockResultSet.getDate("data_di_nascita")).thenReturn(birthDate);
+            when(mockResultSet.getString("indirizzo")).thenReturn("Via Roma");
+            when(mockResultSet.getString("numero_di_cellulare")).thenReturn("123456");
+            when(mockResultSet.getBoolean("poteri")).thenReturn(true);
 
             Utente result = utenteDAO.doRetrieveByEmail(email);
 
             assertNotNull(result);
             assertEquals("Luigi", result.getNome());
+            assertEquals("Verdi", result.getCognome());
+            assertEquals(email, result.getEmail());
+            assertEquals("pass", result.getPassword());
+            assertEquals("CF123", result.getCodiceFiscale());
+            assertEquals(birthDate, result.getDataNascita());
+            assertEquals("Via Roma", result.getIndirizzo());
+            assertEquals("123456", result.getTelefono());
+            assertTrue(result.getPoteri());
+
             verify(mockPreparedStatement).setString(1, email);
         }
     }
@@ -123,6 +184,13 @@ class UtenteDAOTest {
 
             verify(mockPreparedStatement).executeUpdate();
             verify(mockPreparedStatement).setString(1, u.getEmail());
+            verify(mockPreparedStatement).setString(2, u.getPassword());
+            verify(mockPreparedStatement).setString(3, u.getNome());
+            verify(mockPreparedStatement).setString(4, u.getCognome());
+            verify(mockPreparedStatement).setString(5, u.getCodiceFiscale());
+            verify(mockPreparedStatement).setDate(eq(6), any(java.sql.Date.class));
+            verify(mockPreparedStatement).setString(7, u.getIndirizzo());
+            verify(mockPreparedStatement).setString(8, u.getTelefono());
         }
     }
 
@@ -157,15 +225,39 @@ class UtenteDAOTest {
             when(mockResultSet.next()).thenReturn(true, true, false);
 
             // Mock dei dati (semplificato per brevità, usando indici come nel DAO)
+            // Mock dei dati (semplificato per brevità, usando indici come nel DAO)
             when(mockResultSet.getString(1)).thenReturn("u1@test.com", "u2@test.com");
+            when(mockResultSet.getString(2)).thenReturn("pass1", "pass2");
             when(mockResultSet.getString(3)).thenReturn("Nome1", "Nome2");
+            when(mockResultSet.getString(4)).thenReturn("Cognome1", "Cognome2");
             when(mockResultSet.getString(5)).thenReturn("CF1", "CF2");
+            when(mockResultSet.getDate(6)).thenReturn(new java.sql.Date(System.currentTimeMillis()));
+            when(mockResultSet.getString(7)).thenReturn("Indirizzo1", "Indirizzo2");
+            when(mockResultSet.getString(8)).thenReturn("Tel1", "Tel2");
+            when(mockResultSet.getBoolean(9)).thenReturn(false, true);
 
             List<Utente> result = utenteDAO.doRetrieveAll();
 
             assertEquals(2, result.size());
             assertEquals("u1@test.com", result.get(0).getEmail());
+            assertEquals("pass1", result.get(0).getPassword());
+            assertEquals("Nome1", result.get(0).getNome());
+            assertEquals("Cognome1", result.get(0).getCognome());
+            assertEquals("CF1", result.get(0).getCodiceFiscale());
+            assertEquals(new java.sql.Date(System.currentTimeMillis()).toString(),
+                    result.get(0).getDataNascita().toString());
+            assertEquals("Indirizzo1", result.get(0).getIndirizzo());
+            assertEquals("Tel1", result.get(0).getTelefono());
+            assertFalse(result.get(0).getPoteri());
+
             assertEquals("u2@test.com", result.get(1).getEmail());
+            assertEquals("pass2", result.get(1).getPassword());
+            assertEquals("Nome2", result.get(1).getNome());
+            assertEquals("Cognome2", result.get(1).getCognome());
+            assertEquals("CF2", result.get(1).getCodiceFiscale());
+            assertEquals("Indirizzo2", result.get(1).getIndirizzo());
+            assertEquals("Tel2", result.get(1).getTelefono());
+            assertTrue(result.get(1).getPoteri());
         }
     }
 
@@ -188,8 +280,15 @@ class UtenteDAOTest {
             utenteDAO.doUpdateCustomer(u, "old@test.com");
 
             verify(mockPreparedStatement).executeUpdate();
-            verify(mockPreparedStatement).setString(2, "Updated"); // Controllo parametro nome
-            verify(mockPreparedStatement).setString(9, "old@test.com"); // Controllo WHERE
+            verify(mockPreparedStatement).setString(1, u.getEmail());
+            verify(mockPreparedStatement).setString(2, u.getNome());
+            verify(mockPreparedStatement).setString(3, u.getCognome());
+            verify(mockPreparedStatement).setString(4, u.getCodiceFiscale());
+            verify(mockPreparedStatement).setDate(eq(5), any(java.sql.Date.class));
+            verify(mockPreparedStatement).setString(6, u.getIndirizzo());
+            verify(mockPreparedStatement).setString(7, u.getTelefono());
+            verify(mockPreparedStatement).setBoolean(8, u.getPoteri());
+            verify(mockPreparedStatement).setString(9, "old@test.com");
         }
     }
 
@@ -208,6 +307,7 @@ class UtenteDAOTest {
             // Verifica che sia stato chiamato setDate (logica specifica del case
             // "dataDiNascita")
             verify(mockPreparedStatement).setDate(eq(1), any(java.sql.Date.class));
+            verify(mockPreparedStatement).setString(2, u.getEmail());
             verify(mockPreparedStatement).executeUpdate();
         }
     }
@@ -225,20 +325,7 @@ class UtenteDAOTest {
 
             // Verifica logica booleana
             verify(mockPreparedStatement).setBoolean(1, true);
-            verify(mockPreparedStatement).executeUpdate();
-        }
-    }
-
-    @Test
-    void doRemoveUserByEmail_Success() throws SQLException {
-        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
-            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
-            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-            when(mockPreparedStatement.executeUpdate()).thenReturn(1);
-
-            utenteDAO.doRemoveUserByEmail("delete@me.com");
-
-            verify(mockPreparedStatement).setString(1, "delete@me.com");
+            verify(mockPreparedStatement).setString(2, u.getEmail());
             verify(mockPreparedStatement).executeUpdate();
         }
     }
@@ -325,6 +412,7 @@ class UtenteDAOTest {
             utenteDAO.doUpdateCustomerGeneric(u, "poteri", "false");
 
             verify(mockPreparedStatement).setBoolean(1, false);
+            verify(mockPreparedStatement).setString(2, u.getEmail());
             verify(mockPreparedStatement).executeUpdate();
         }
     }
@@ -340,6 +428,7 @@ class UtenteDAOTest {
             utenteDAO.doUpdateCustomerGeneric(u, "nome", "NewName");
 
             verify(mockPreparedStatement).setString(1, "NewName");
+            verify(mockPreparedStatement).setString(2, u.getEmail());
             verify(mockPreparedStatement).executeUpdate();
         }
     }
@@ -368,16 +457,71 @@ class UtenteDAOTest {
     }
 
     @Test
+    void doRetrieveByEmailAndPassword_Success_PoteriTrue() throws SQLException {
+        String email = "admin@example.com";
+        String password = "password";
+
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+            when(mockResultSet.next()).thenReturn(true);
+
+            when(mockResultSet.getString("email")).thenReturn(email);
+            when(mockResultSet.getString("password")).thenReturn(password);
+            when(mockResultSet.getBoolean("poteri")).thenReturn(true);
+            // Mock other required fields to avoid NPE if DAO uses them (it assumes not null
+            // usually)
+            when(mockResultSet.getString("nome")).thenReturn("Adm");
+            when(mockResultSet.getString("cognome")).thenReturn("User");
+
+            Utente result = utenteDAO.doRetrieveByEmailAndPassword(email, password);
+
+            assertNotNull(result);
+            assertTrue(result.getPoteri());
+        }
+    }
+
+    @Test
+    void doRemoveUserByEmail_Success() throws SQLException {
+        java.io.ByteArrayOutputStream outContent = new java.io.ByteArrayOutputStream();
+        java.io.PrintStream originalOut = System.out;
+        System.setOut(new java.io.PrintStream(outContent));
+
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeUpdate()).thenReturn(1);
+
+            utenteDAO.doRemoveUserByEmail("delete@me.com");
+
+            verify(mockPreparedStatement).setString(1, "delete@me.com");
+            verify(mockPreparedStatement).executeUpdate();
+
+            assertTrue(outContent.toString().contains("was deleted from db"));
+        } finally {
+            System.setOut(originalOut);
+        }
+    }
+
+    @Test
     void doRemoveUserByEmail_NoDelete() throws SQLException {
+        java.io.ByteArrayOutputStream outContent = new java.io.ByteArrayOutputStream();
+        java.io.PrintStream originalOut = System.out;
+        System.setOut(new java.io.PrintStream(outContent));
+
         try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
             mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
             when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
             when(mockPreparedStatement.executeUpdate()).thenReturn(0);
 
-            // Should not throw exception, just print to stdout
             utenteDAO.doRemoveUserByEmail("nodelete@me.com");
 
             verify(mockPreparedStatement).executeUpdate();
+
+            assertTrue(outContent.toString().contains("No user was deleted from db"));
+        } finally {
+            System.setOut(originalOut);
         }
     }
 

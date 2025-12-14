@@ -111,8 +111,8 @@ public class OrdineServletTest {
 
         // Usiamo MockedConstruction per verificare che NESSUN DAO venga creato
         try (MockedConstruction<OrdineDao> mockedOrd = mockConstruction(OrdineDao.class);
-             MockedConstruction<CarrelloDAO> mockedCart = mockConstruction(CarrelloDAO.class);
-             MockedConstruction<DettaglioOrdineDAO> mockedDet = mockConstruction(DettaglioOrdineDAO.class)) {
+                MockedConstruction<CarrelloDAO> mockedCart = mockConstruction(CarrelloDAO.class);
+                MockedConstruction<DettaglioOrdineDAO> mockedDet = mockConstruction(DettaglioOrdineDAO.class)) {
 
             servlet.doPost(request, response);
 
@@ -157,26 +157,36 @@ public class OrdineServletTest {
         utente.setEmail("user@example.com");
 
         // Carrello con 2 items
-        List<Carrello> cart = List.of(new Carrello(), new Carrello());
+        Carrello item1 = new Carrello();
+        item1.setIdProdotto("P1");
+        item1.setIdVariante(10);
+        item1.setQuantita(2);
+
+        Carrello item2 = new Carrello();
+        item2.setIdProdotto("P2");
+        item2.setIdVariante(20);
+        item2.setQuantita(1);
+
+        List<Carrello> cart = List.of(item1, item2);
 
         when(request.getSession(false)).thenReturn(session);
         when(session.getAttribute("cart")).thenReturn(cart);
         when(session.getAttribute("Utente")).thenReturn(utente);
 
         // 2. Preparazione Mock DAO
-        // Mock degli oggetti che verranno restituiti dai DAO
-        Ordine mockOrdine = mock(Ordine.class);
-        List<DettaglioOrdine> mockDettagli = List.of(new DettaglioOrdine(), new DettaglioOrdine());
+        Ordine mockOrdine = new Ordine();
+        mockOrdine.setIdOrdine(123);
+        List<DettaglioOrdine> mockDettagli = new ArrayList<>();
 
         try (MockedConstruction<OrdineDao> mockedOrd = mockConstruction(OrdineDao.class, (mock, ctx) -> {
-            // Stub per i DAO
             when(mock.getLastInsertedId()).thenReturn(123);
             when(mock.doRetrieveById(123)).thenReturn(mockOrdine);
         });
-             MockedConstruction<CarrelloDAO> mockedCart = mockConstruction(CarrelloDAO.class);
-             MockedConstruction<DettaglioOrdineDAO> mockedDet = mockConstruction(DettaglioOrdineDAO.class, (mock, ctx) -> {
-                 when(mock.doRetrieveById(anyInt())).thenReturn(mockDettagli);
-             })) {
+                MockedConstruction<CarrelloDAO> mockedCart = mockConstruction(CarrelloDAO.class);
+                MockedConstruction<DettaglioOrdineDAO> mockedDet = mockConstruction(DettaglioOrdineDAO.class,
+                        (mock, ctx) -> {
+                            when(mock.doRetrieveById(123)).thenReturn(mockDettagli);
+                        })) {
 
             // 3. Esecuzione
             servlet.doPost(request, response);
@@ -186,22 +196,51 @@ public class OrdineServletTest {
             CarrelloDAO carrelloDAO = mockedCart.constructed().get(0);
             DettaglioOrdineDAO dettaglioDAO = mockedDet.constructed().get(0);
 
-            // Creazione ordine
-            verify(ordineDao).doSave(any(Ordine.class));
-            verify(ordineDao, times(2)).getLastInsertedId();
-            // Creazione dettagli (2 items nel carrello -> 2 chiamate a doSave)
-            verify(dettaglioDAO, times(2)).doSave(any(DettaglioOrdine.class));
+            // Kill Mutant 1 & Setters: Ordine
+            ArgumentCaptor<Ordine> ordineCaptor = ArgumentCaptor.forClass(Ordine.class);
+            verify(ordineDao).doSave(ordineCaptor.capture());
+            assertEquals("user@example.com", ordineCaptor.getValue().getEmailUtente());
 
-            // Pulizia carrello
+            // Kill Mutant 4 & Setters: DettaglioOrdine
+            // We expect 2 saves. We capture all of them.
+            ArgumentCaptor<DettaglioOrdine> dettagliCaptor = ArgumentCaptor.forClass(DettaglioOrdine.class);
+            verify(dettaglioDAO, times(2)).doSave(dettagliCaptor.capture());
+
+            List<DettaglioOrdine> capturedDetails = dettagliCaptor.getAllValues();
+            assertEquals(2, capturedDetails.size());
+
+            // Check Item 1 (P1, Var 10, Qty 2)
+            DettaglioOrdine d1 = capturedDetails.stream().filter(d -> d.getIdProdotto().equals("P1")).findFirst()
+                    .orElseThrow();
+            assertEquals(123, d1.getIdOrdine());
+            assertEquals(10, d1.getIdVariante());
+            assertEquals(2, d1.getQuantita());
+
+            // Check Item 2 (P2, Var 20, Qty 1)
+            DettaglioOrdine d2 = capturedDetails.stream().filter(d -> d.getIdProdotto().equals("P2")).findFirst()
+                    .orElseThrow();
+            assertEquals(123, d2.getIdOrdine());
+            assertEquals(20, d2.getIdVariante());
+            assertEquals(1, d2.getQuantita());
+
+            // Kill Mutant 3: session.removeAttribute("cart")
             verify(session).removeAttribute("cart");
-            verify(carrelloDAO).doRemoveCartByUser("user@example.com");
 
-            // Resoconto e Forward
-            verify(ordineDao).doRetrieveById(123);
-            verify(dettaglioDAO).doRetrieveById(anyInt());
-            verify(request).setAttribute("order", mockOrdine);
-            verify(request).setAttribute("orderDetails", mockDettagli);
-            verify(dispatcher).forward(request, response);
+            // Additional InOrder verification for sequence strictness
+            org.mockito.InOrder inOrder = inOrder(ordineDao, session, carrelloDAO, dettaglioDAO, dispatcher, request);
+            inOrder.verify(ordineDao).doSave(any(Ordine.class)); // Already strictly verified above
+            inOrder.verify(ordineDao).getLastInsertedId();
+            inOrder.verify(session).removeAttribute("cart");
+            inOrder.verify(carrelloDAO).doRemoveCartByUser("user@example.com");
+            inOrder.verify(dettaglioDAO, times(2)).doSave(any(DettaglioOrdine.class)); // Already verified above
+            inOrder.verify(ordineDao).getLastInsertedId();
+            inOrder.verify(ordineDao).doRetrieveById(123);
+            inOrder.verify(dettaglioDAO).doRetrieveById(123);
+
+            // Verify setAttribute to kill mutants there
+            inOrder.verify(request).setAttribute(eq("order"), any(Ordine.class));
+            inOrder.verify(request).setAttribute(eq("orderDetails"), anyList());
+            inOrder.verify(dispatcher).forward(request, response);
         }
     }
 }

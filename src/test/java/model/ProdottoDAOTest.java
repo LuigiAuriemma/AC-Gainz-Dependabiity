@@ -35,35 +35,46 @@ class ProdottoDAOTest {
     @Test
     void doRetrieveById_Success() throws SQLException {
         String idProd = "PROD1";
+        List<Variante> varianteList = new ArrayList<>();
+        varianteList.add(new Variante()); // Add a variant
 
-        // 1. Mock della connessione statica
         try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class);
-                // 2. Mock del "new VarianteDAO()" che avviene dentro il metodo
                 MockedConstruction<VarianteDAO> mockedVarianteDAO = Mockito.mockConstruction(VarianteDAO.class,
                         (mock, context) -> {
-                            // Quando viene chiamato doRetrieveVarianti... sul mock creato internamente
-                            when(mock.doRetrieveVariantiByIdProdotto(idProd)).thenReturn(new ArrayList<>());
+                            when(mock.doRetrieveVariantiByIdProdotto(idProd)).thenReturn(varianteList);
                         })) {
 
             mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
             when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
             when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
 
-            // Simuliamo il ritrovamento del prodotto
             when(mockResultSet.next()).thenReturn(true);
             when(mockResultSet.getString("id_prodotto")).thenReturn(idProd);
             when(mockResultSet.getString("nome")).thenReturn("Proteine Whey");
-            // ... altri campi opzionali per il test ...
+            when(mockResultSet.getString("descrizione")).thenReturn("Ottime");
+            when(mockResultSet.getString("categoria")).thenReturn("Proteine");
+            when(mockResultSet.getString("immagine")).thenReturn("img.jpg");
+            when(mockResultSet.getInt("calorie")).thenReturn(150);
+            when(mockResultSet.getInt("carboidrati")).thenReturn(5);
+            when(mockResultSet.getInt("proteine")).thenReturn(30);
+            when(mockResultSet.getInt("grassi")).thenReturn(2);
 
             Prodotto result = prodottoDAO.doRetrieveById(idProd);
 
             assertNotNull(result);
             assertEquals(idProd, result.getIdProdotto());
             assertEquals("Proteine Whey", result.getNome());
+            assertEquals("Ottime", result.getDescrizione());
+            assertEquals("Proteine", result.getCategoria());
+            assertEquals("img.jpg", result.getImmagine());
+            assertEquals(150, result.getCalorie());
+            assertEquals(5, result.getCarboidrati());
+            assertEquals(30, result.getProteine());
+            assertEquals(2, result.getGrassi());
+            assertEquals(1, result.getVarianti().size()); // Kill setVarianti line 35
 
-            // Verifichiamo che sia stato chiamato il metodo del VarianteDAO mockato
-            VarianteDAO vDaoMock = mockedVarianteDAO.constructed().get(0);
-            verify(vDaoMock).doRetrieveVariantiByIdProdotto(idProd);
+            verify(mockPreparedStatement).setString(1, idProd); // Kill setString line 15
+            verify(mockedVarianteDAO.constructed().get(0)).doRetrieveVariantiByIdProdotto(idProd);
         }
     }
 
@@ -72,9 +83,13 @@ class ProdottoDAOTest {
         Prodotto p = new Prodotto();
         p.setIdProdotto("P1");
         p.setNome("Test");
+        p.setDescrizione("Desc");
+        p.setCategoria("Cat");
+        p.setImmagine("img.jpg");
         p.setCalorie(100);
-        // ... setta altri campi necessari per evitare NullPointerException se usati nel
-        // DAO
+        p.setCarboidrati(50);
+        p.setProteine(20);
+        p.setGrassi(10);
 
         try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
             mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
@@ -85,7 +100,15 @@ class ProdottoDAOTest {
             prodottoDAO.doSave(p);
 
             verify(mockPreparedStatement).setString(1, "P1");
+            verify(mockPreparedStatement).setString(2, "Test");
+            verify(mockPreparedStatement).setString(3, "Desc");
+            verify(mockPreparedStatement).setString(4, "Cat");
+            verify(mockPreparedStatement).setString(5, "img.jpg");
             verify(mockPreparedStatement).setInt(6, 100);
+            verify(mockPreparedStatement).setInt(7, 50);
+            verify(mockPreparedStatement).setInt(8, 20);
+            verify(mockPreparedStatement).setInt(9, 10);
+
             verify(mockPreparedStatement).executeUpdate();
         }
     }
@@ -152,33 +175,36 @@ class ProdottoDAOTest {
                         })) {
 
             mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
-            when(mockConnection.prepareStatement(contains("WHERE categoria = ?"))).thenReturn(mockPreparedStatement); // Nota
-                                                                                                                      // il
-                                                                                                                      // contains
-                                                                                                                      // che
-                                                                                                                      // è
-                                                                                                                      // case
-                                                                                                                      // sensitive
-                                                                                                                      // a
-                                                                                                                      // volte,
-                                                                                                                      // meglio
-                                                                                                                      // usare
-                                                                                                                      // stringa
-                                                                                                                      // parziale
-                                                                                                                      // o
-                                                                                                                      // esatta
-                                                                                                                      // se
-                                                                                                                      // nota
-            // Correggiamo matcher per essere sicuri
             when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
 
             when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
             when(mockResultSet.next()).thenReturn(true, false);
             when(mockResultSet.getString("id_prodotto")).thenReturn("P_Snack");
+            when(mockResultSet.getString("nome")).thenReturn("Barretta");
+            when(mockResultSet.getString("descrizione")).thenReturn("Gustosa");
+            when(mockResultSet.getString("categoria")).thenReturn("Snack");
+            when(mockResultSet.getString("immagine")).thenReturn("snack.jpg");
+            when(mockResultSet.getInt("calorie")).thenReturn(200);
+            when(mockResultSet.getInt("carboidrati")).thenReturn(20);
+            when(mockResultSet.getInt("proteine")).thenReturn(10);
+            when(mockResultSet.getInt("grassi")).thenReturn(5);
 
-            List<Prodotto> list = prodottoDAO.doRetrieveByCriteria(attr, val);
+            List<Prodotto> result = prodottoDAO.doRetrieveByCriteria(attr, val);
 
-            assertEquals(1, list.size());
+            assertEquals(1, result.size());
+            Prodotto p = result.get(0);
+            assertEquals("P_Snack", p.getIdProdotto());
+            assertEquals("Barretta", p.getNome());
+            assertEquals("Gustosa", p.getDescrizione());
+            assertEquals("Snack", p.getCategoria());
+            assertEquals("snack.jpg", p.getImmagine());
+            assertEquals(200, p.getCalorie());
+            assertEquals(20, p.getCarboidrati());
+            assertEquals(10, p.getProteine());
+            assertEquals(5, p.getGrassi());
+            assertNotNull(p.getVarianti());
+            assertEquals(1, p.getVarianti().size());
+
             verify(mockPreparedStatement).setString(1, val);
         }
     }
@@ -188,7 +214,14 @@ class ProdottoDAOTest {
         Prodotto p = new Prodotto();
         p.setIdProdotto("P_UPD");
         p.setNome("Updated");
-        // ... setta campi
+        p.setDescrizione("DescUpd");
+        p.setCategoria("CatUpd");
+        p.setImmagine("ImgUpd");
+        p.setCalorie(300);
+        p.setCarboidrati(30);
+        p.setProteine(30);
+        p.setGrassi(30);
+
         String idOld = "P_OLD";
 
         try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
@@ -198,7 +231,16 @@ class ProdottoDAOTest {
 
             prodottoDAO.updateProduct(p, idOld);
 
-            verify(mockPreparedStatement).setString(10, idOld); // Verifica che il WHERE usi l'id vecchio
+            verify(mockPreparedStatement).setString(1, "P_UPD");
+            verify(mockPreparedStatement).setString(2, "Updated");
+            verify(mockPreparedStatement).setString(3, "DescUpd");
+            verify(mockPreparedStatement).setString(4, "CatUpd");
+            verify(mockPreparedStatement).setString(5, "ImgUpd");
+            verify(mockPreparedStatement).setInt(6, 300);
+            verify(mockPreparedStatement).setInt(7, 30);
+            verify(mockPreparedStatement).setInt(8, 30);
+            verify(mockPreparedStatement).setInt(9, 30);
+            verify(mockPreparedStatement).setString(10, idOld);
             verify(mockPreparedStatement).executeUpdate();
         }
     }
@@ -230,10 +272,30 @@ class ProdottoDAOTest {
 
             when(mockResultSet.next()).thenReturn(true, false);
             when(mockResultSet.getString("id_prodotto")).thenReturn("ALL_1");
+            when(mockResultSet.getString("nome")).thenReturn("Name");
+            when(mockResultSet.getString("descrizione")).thenReturn("Desc");
+            when(mockResultSet.getString("categoria")).thenReturn("Cat");
+            when(mockResultSet.getString("immagine")).thenReturn("Img");
+            when(mockResultSet.getInt("calorie")).thenReturn(100);
+            when(mockResultSet.getInt("carboidrati")).thenReturn(10);
+            when(mockResultSet.getInt("proteine")).thenReturn(10);
+            when(mockResultSet.getInt("grassi")).thenReturn(10);
 
             List<Prodotto> result = prodottoDAO.doRetrieveAll();
 
             assertEquals(1, result.size());
+            Prodotto p = result.get(0);
+            assertEquals("ALL_1", p.getIdProdotto());
+            assertEquals("Name", p.getNome());
+            assertEquals("Desc", p.getDescrizione());
+            assertEquals("Cat", p.getCategoria());
+            assertEquals("Img", p.getImmagine());
+            assertEquals(100, p.getCalorie());
+            assertEquals(10, p.getCarboidrati());
+            assertEquals(10, p.getProteine());
+            assertEquals(10, p.getGrassi());
+            assertNotNull(p.getVarianti());
+            assertEquals(1, p.getVarianti().size());
         }
     }
 
@@ -288,6 +350,43 @@ class ProdottoDAOTest {
             assertTrue(sql.contains("p.nome LIKE ?"));
             verify(mockPreparedStatement).setObject(1, "%Protein%");
             assertEquals(1, result.size());
+            assertEquals("P_NAME", result.get(0).getIdProdotto());
+            // Assert extra fields to kill extractProductFromResultSet mutants
+            // Note: we need to ensure the mocked ResultSet returns these values first.
+            // In the setup above, we only mocked id_prodotto. Let's add more.
+        }
+    }
+
+    @Test
+    void filterProducts_FieldsVerification() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class);
+                MockedConstruction<VarianteDAO> mockedVarianteDAO = Mockito.mockConstruction(VarianteDAO.class,
+                        (mock, context) -> {
+                            when(mock.doRetrieveCheapestFilteredVarianteByIdProdotto(anyString(), any(), any(),
+                                    anyBoolean()))
+                                    .thenReturn(new Variante());
+                        })) {
+
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            when(mockResultSet.next()).thenReturn(true, false);
+            when(mockResultSet.getString("id_prodotto")).thenReturn("P_FIELDS");
+            when(mockResultSet.getString("nome")).thenReturn("ProdName");
+            when(mockResultSet.getString("categoria")).thenReturn("ProdCat");
+            when(mockResultSet.getString("immagine")).thenReturn("ProdImg");
+            when(mockResultSet.getInt("calorie")).thenReturn(123);
+
+            List<Prodotto> result = prodottoDAO.filterProducts(null, null, null, null, null);
+
+            assertEquals(1, result.size());
+            Prodotto p = result.get(0);
+            assertEquals("P_FIELDS", p.getIdProdotto());
+            assertEquals("ProdName", p.getNome()); // Kill setNome
+            assertEquals("ProdCat", p.getCategoria()); // Kill setCategoria
+            assertEquals("ProdImg", p.getImmagine()); // Kill setImmagine
+            assertEquals(123, p.getCalorie());
         }
     }
 
@@ -434,11 +533,14 @@ class ProdottoDAOTest {
     void doRetrieveByCriteria_Tutto() {
         // Spy the DAO to verify doRetrieveAll call
         ProdottoDAO spyDao = Mockito.spy(new ProdottoDAO());
-        doReturn(new ArrayList<>()).when(spyDao).doRetrieveAll();
+        List<Prodotto> list = new ArrayList<>();
+        list.add(new Prodotto());
+        doReturn(list).when(spyDao).doRetrieveAll();
 
-        spyDao.doRetrieveByCriteria("any", "Tutto");
+        List<Prodotto> result = spyDao.doRetrieveByCriteria("any", "Tutto");
 
         verify(spyDao).doRetrieveAll();
+        assertEquals(1, result.size()); // Kill EmptyObjectReturnValsMutator
     }
 
     @Test
@@ -585,6 +687,52 @@ class ProdottoDAOTest {
     }
 
     @Test
+    void filterProducts_SortingPriceAsc_StrictAndRobust() throws SQLException {
+        // Targeted Test to kill MathMutators in getLowestPrice
+        // P1: Price 100, Disc 20 -> Net 80.
+        // P2: Price 85, Disc 0 -> Net 85.
+        // P3: Price 50, Disc 0 -> Net 50.
+        // Expected Asc Order: P3 (50), P1 (80), P2 (85).
+
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class);
+                MockedConstruction<VarianteDAO> mockedVarianteDAO = Mockito.mockConstruction(VarianteDAO.class,
+                        (mock, context) -> {
+                            Variante v1 = new Variante();
+                            v1.setPrezzo(100.0f);
+                            v1.setSconto(20);
+                            Variante v2 = new Variante();
+                            v2.setPrezzo(85.0f);
+                            v2.setSconto(0);
+                            Variante v3 = new Variante();
+                            v3.setPrezzo(50.0f);
+                            v3.setSconto(0);
+
+                            when(mock.doRetrieveCheapestFilteredVarianteByIdProdotto(eq("P1"), any(), any(),
+                                    anyBoolean())).thenReturn(v1);
+                            when(mock.doRetrieveCheapestFilteredVarianteByIdProdotto(eq("P2"), any(), any(),
+                                    anyBoolean())).thenReturn(v2);
+                            when(mock.doRetrieveCheapestFilteredVarianteByIdProdotto(eq("P3"), any(), any(),
+                                    anyBoolean())).thenReturn(v3);
+                        })) {
+
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            when(mockResultSet.next()).thenReturn(true, true, true, false);
+            when(mockResultSet.getString("id_prodotto")).thenReturn("P1", "P2", "P3");
+            when(mockResultSet.getInt("calorie")).thenReturn(100, 100, 100);
+
+            List<Prodotto> result = prodottoDAO.filterProducts(null, "PriceAsc", null, null, null);
+
+            assertEquals(3, result.size());
+            assertEquals("P3", result.get(0).getIdProdotto()); // 50
+            assertEquals("P1", result.get(1).getIdProdotto()); // 80
+            assertEquals("P2", result.get(2).getIdProdotto()); // 85
+        }
+    }
+
+    @Test
     void filterProducts_SortingInvalid() throws SQLException {
         try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class);
                 MockedConstruction<VarianteDAO> mockedVarianteDAO = Mockito.mockConstruction(VarianteDAO.class,
@@ -623,6 +771,39 @@ class ProdottoDAOTest {
             when(mockResultSet.getString("id_prodotto")).thenReturn("P1");
 
             assertThrows(RuntimeException.class, () -> prodottoDAO.filterProducts(null, null, null, null, null));
+        }
+    }
+
+    @Test
+    void filterProducts_SystemOutCapture() throws SQLException {
+        // Test to kill System.out.println mutants
+        java.io.ByteArrayOutputStream outContent = new java.io.ByteArrayOutputStream();
+        java.io.PrintStream originalOut = System.out;
+        System.setOut(new java.io.PrintStream(outContent));
+
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class);
+                MockedConstruction<VarianteDAO> mockedVarianteDAO = Mockito.mockConstruction(VarianteDAO.class,
+                        (mock, context) -> when(mock.doRetrieveCheapestFilteredVarianteByIdProdotto(anyString(), any(),
+                                any(), anyBoolean()))
+                                .thenReturn(new Variante()))) {
+
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            when(mockResultSet.next()).thenReturn(false);
+
+            prodottoDAO.filterProducts("Cat", null, null, null, "Name");
+
+            String output = outContent.toString();
+            // Verify debug print statements
+            assertTrue(output.contains("nameFilterDAO: Name"));
+            // Verify SQL print statement to kill mutant at line 77
+            // logic: if (!conditions.isEmpty()) -> print sql
+            assertTrue(output.contains("SELECT p.* FROM prodotto p WHERE"));
+
+        } finally {
+            System.setOut(originalOut);
         }
     }
 }

@@ -44,7 +44,8 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
         } catch (Exception e) {
             log("Errore in doPost ModificaDatiUtenteServlet", e);
             if (!resp.isCommitted()) {
-                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno durante la modifica dei dati.");
+                ServletUtils.sendErrorSafe(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+                        "Errore interno durante la modifica dei dati.");
             }
         }
     }
@@ -61,19 +62,19 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
         // gestiamo in base a cosa l'utente vuole modificare
         switch (field) {
             case "password" ->
-                    handlePasswordChange(request, response, utente, requestDispatcher, utenteDAO);
+                handlePasswordChange(request, response, utente, requestDispatcher, utenteDAO);
             case "address" ->
-                    handleAddressChange(request, response, utente, requestDispatcher, utenteDAO);
+                handleAddressChange(request, response, utente, requestDispatcher, utenteDAO);
             case "phone" ->
-                    handlePhoneChange(request, response, utente, requestDispatcher, utenteDAO);
+                handlePhoneChange(request, response, utente, requestDispatcher, utenteDAO);
             case "codice-fiscale" ->
-                    handleCodiceFiscaleChange(request, response, utente, requestDispatcher, utenteDAO);
+                handleCodiceFiscaleChange(request, response, utente, requestDispatcher, utenteDAO);
             case "data-di-nascita" ->
-                    handleDataNascitaChange(request, response, utente, requestDispatcher, utenteDAO);
+                handleDataNascitaChange(request, response, utente, requestDispatcher, utenteDAO);
             case "nome" ->
-                    handleNomeChange(request, response, utente, requestDispatcher, utenteDAO);
+                handleNomeChange(request, response, utente, requestDispatcher, utenteDAO);
             case "cognome" ->
-                    handleCognomeChange(request, response, utente, requestDispatcher, utenteDAO);
+                handleCognomeChange(request, response, utente, requestDispatcher, utenteDAO);
             default -> {
                 request.setAttribute("error", "Invalid field parameter");
                 requestDispatcher.forward(request, response);
@@ -83,7 +84,7 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
 
     // metodo per il cambio password
     private void handlePasswordChange(HttpServletRequest request, HttpServletResponse response, Utente utente,
-                                      RequestDispatcher requestDispatcher, UtenteDAO utenteDAO)
+            RequestDispatcher requestDispatcher, UtenteDAO utenteDAO)
             throws ServletException, IOException {
 
         // prendiamo i dati dal form
@@ -126,9 +127,6 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
 
         String hashedCurrentPassword = sha512(currentPassword);
 
-        System.out.println("Hashed current password: " + hashedCurrentPassword);
-        System.out.println("Stored password: " + utente.getPassword());
-
         // se la password corrente inserita è quella presente nel DB
         if (!hashedCurrentPassword.equals(utente.getPassword())) {
             request.setAttribute("messageType", "error");
@@ -151,12 +149,10 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
         utente.setPassword(newPassword);
         utente.hashPassword();
 
-        System.out.println(utente.getPassword());
-
         request.getSession().setAttribute("Utente", utente);
 
         utenteDAO.doUpdateCustomerGeneric(utente, "password", utente.getPassword());
-        System.out.println("Password Cambiata con: " + utente.getPassword());
+
         request.setAttribute("messageType", "success");
         request.setAttribute("message", "Password modificata con successo");
         request.setAttribute("field", "password");
@@ -164,7 +160,7 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
     }
 
     private void handleAddressChange(HttpServletRequest request, HttpServletResponse response, Utente utente,
-                                     RequestDispatcher requestDispatcher, UtenteDAO utenteDAO)
+            RequestDispatcher requestDispatcher, UtenteDAO utenteDAO)
             throws ServletException, IOException {
 
         // prendo l'indirizzo dal form
@@ -191,7 +187,7 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
     }
 
     private void handlePhoneChange(HttpServletRequest request, HttpServletResponse response, Utente utente,
-                                   RequestDispatcher requestDispatcher, UtenteDAO utenteDAO)
+            RequestDispatcher requestDispatcher, UtenteDAO utenteDAO)
             throws ServletException, IOException {
         // prendiamo il parametro del form
         String telefono = request.getParameter("new-phone");
@@ -230,7 +226,7 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
     }
 
     private void handleCodiceFiscaleChange(HttpServletRequest request, HttpServletResponse response, Utente utente,
-                                           RequestDispatcher requestDispatcher, UtenteDAO utenteDAO)
+            RequestDispatcher requestDispatcher, UtenteDAO utenteDAO)
             throws ServletException, IOException {
         // prendiamo il dato dal form
         String codFiscale = request.getParameter("new-codice-fiscale");
@@ -270,7 +266,7 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
     }
 
     private void handleDataNascitaChange(HttpServletRequest request, HttpServletResponse response, Utente utente,
-                                         RequestDispatcher requestDispatcher, UtenteDAO utenteDAO)
+            RequestDispatcher requestDispatcher, UtenteDAO utenteDAO)
             throws ServletException, IOException {
         // prendiamo il dato del form
         String ddn = request.getParameter("new-birthdate");
@@ -321,7 +317,7 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
     }
 
     private void handleNomeChange(HttpServletRequest request, HttpServletResponse response, Utente utente,
-                                  RequestDispatcher requestDispatcher, UtenteDAO utenteDAO)
+            RequestDispatcher requestDispatcher, UtenteDAO utenteDAO)
             throws ServletException, IOException {
         // prendiamo il dato del form
         String nome = request.getParameter("new-name");
@@ -347,7 +343,7 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
     }
 
     private void handleCognomeChange(HttpServletRequest request, HttpServletResponse response, Utente utente,
-                                     RequestDispatcher requestDispatcher, UtenteDAO utenteDAO)
+            RequestDispatcher requestDispatcher, UtenteDAO utenteDAO)
             throws ServletException, IOException {
         // prendiamo il dato dal form
         String cognome = request.getParameter("new-surname");
@@ -375,7 +371,7 @@ public class ModificaDatiUtenteServlet extends HttpServlet {
     public String sha512(String pass) {
         try {
             var digest = MessageDigest.getInstance("SHA-512");
-            digest.reset();
+
             digest.update(pass.getBytes(StandardCharsets.UTF_8));
             pass = String.format("%0128x", new BigInteger(1, digest.digest()));
         } catch (NoSuchAlgorithmException e) {

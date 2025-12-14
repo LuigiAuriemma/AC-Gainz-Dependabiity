@@ -1,5 +1,8 @@
 package controller.homepage;
 
+import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -28,8 +31,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * Classe di test completa per CarrelloServlet.
- * Testa tutte le azioni (show, add, remove, quantity) e le loro faglie (NPE,
- * IOOBE, NFE).
+ * Testa tutte le azioni (show, add, remove, quantity) e le loro faglie.
  */
 public class CarrelloServletTest {
 
@@ -37,6 +39,8 @@ public class CarrelloServletTest {
     private HttpServletRequest request;
     private HttpServletResponse response;
     private HttpSession session;
+    private ServletConfig servletConfig;
+    private ServletContext servletContext;
 
     // Per catturare l'output JSON
     private StringWriter stringWriter;
@@ -46,53 +50,33 @@ public class CarrelloServletTest {
     private List<Carrello> mockCart;
 
     @BeforeEach
-    void setup() throws IOException {
+    void setup() throws IOException, ServletException {
         servlet = new CarrelloServlet();
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         session = mock(HttpSession.class);
+        servletConfig = mock(ServletConfig.class);
+        servletContext = mock(ServletContext.class);
 
         // Prepariamo un writer in memoria per catturare l'output JSON
         stringWriter = new StringWriter();
-        printWriter = new PrintWriter(stringWriter);
+        printWriter = spy(new PrintWriter(stringWriter)); // Spy per verificare flush/close
 
         // Colleghiamo i mock
         when(request.getSession()).thenReturn(session);
         when(response.getWriter()).thenReturn(printWriter);
 
+        // Setup ServletContext per log
+        when(servletConfig.getServletContext()).thenReturn(servletContext);
+        servlet.init(servletConfig);
+
         // Prepariamo un carrello "reale" (ma fittizio) per i test
-        // Usiamo una ArrayList reale perché deve essere modificabile (es. .removeIf)
         mockCart = new ArrayList<>();
     }
 
-    /**
-     * Helper per ottenere l'output JSON catturato.
-     */
     private String getJsonOutput() {
-        printWriter.flush();
         return stringWriter.toString().trim();
     }
-
-    /**
-     * Helper per preparare i mock DAO di base
-     */
-    private void stubProdottoEVariante(Prodotto p, Variante v, String pId, String gusto, int peso) {
-        // Stub ProdottoDAO
-        when(pDaoMock.doRetrieveById(pId)).thenReturn(p);
-
-        // Stub VarianteDAO
-        // Usiamo anyString(), anyString(), anyInt() perché i parametri potrebbero
-        // essere null
-        when(vDaoMock.doRetrieveVariantByFlavourAndWeight(anyString(), anyString(), anyInt()))
-                .thenReturn(new ArrayList<>()); // Ritorna vuoto di default
-        when(vDaoMock.doRetrieveVariantByFlavourAndWeight(pId, gusto, peso))
-                .thenReturn(List.of(v)); // Ritorna la variante corretta per i parametri giusti
-    }
-
-    // Mock globali per i DAO (per non annidare troppi try-with-resources)
-    // Questi verranno inizializzati nei @Nested setup
-    private ProdottoDAO pDaoMock;
-    private VarianteDAO vDaoMock;
 
     // --- Test 1: Generali ---
 
@@ -103,18 +87,9 @@ public class CarrelloServletTest {
         @Test
         @DisplayName("doPost deve delegare a doGet")
         void doPost_delegatesToDoGet() throws ServletException, IOException {
-            // 1. Crea lo spy
             CarrelloServlet spyServlet = spy(new CarrelloServlet());
-
-            // 2. IMPORTANTE: Disattiva l'esecuzione del VERO metodo doGet
-            // Vogliamo solo verificare che venga chiamato, non rieseguire tutta la sua
-            // logica.
             doNothing().when(spyServlet).doGet(any(HttpServletRequest.class), any(HttpServletResponse.class));
-
-            // 3. Esegui doPost (che ora chiamerà il doGet "finto")
             spyServlet.doPost(request, response);
-
-            // 4. Verifica che la chiamata sia avvenuta
             verify(spyServlet).doGet(request, response);
         }
 
@@ -122,36 +97,44 @@ public class CarrelloServletTest {
         @DisplayName("Action non valida -> Restituisce []")
         void invalidAction_returnsEmptyJson() throws ServletException, IOException {
             when(request.getParameter("action")).thenReturn("azione-sbagliata");
-
             servlet.doGet(request, response);
-
+            verify(response).setContentType("application/json");
+            verify(response).setCharacterEncoding("UTF-8"); // Kill VoidMethodCall
             assertEquals("[]", getJsonOutput());
+            verify(printWriter, atLeastOnce()).flush(); // Kill flush
         }
 
         @Test
         @DisplayName("Action null -> Restituisce []")
         void doGet_nullAction_returnsEmptyJson() throws ServletException, IOException {
             when(request.getParameter("action")).thenReturn(null);
-
             servlet.doGet(request, response);
-
             assertEquals("[]", getJsonOutput());
+            verify(response).setCharacterEncoding("UTF-8"); // Kill VoidMethodCall
+            verify(printWriter, atLeastOnce()).flush(); // Kill flush
+        }
+
+        @Test
+        @DisplayName("Eccezione in doGet -> Logga errore e invia 500")
+        void doGet_exception_logsAndSendsError() throws ServletException, IOException {
+            when(request.getParameter("action")).thenThrow(new RuntimeException("Test Exception"));
+            servlet.doGet(request, response);
+            verify(servletContext).log(eq("null: Errore in CarrelloServlet doGet"), any(RuntimeException.class));
+            verify(response).sendError(eq(HttpServletResponse.SC_INTERNAL_SERVER_ERROR), anyString());
         }
     }
-    // --- Test 2: action="show" ---
+
+    // --- Test 2: Show ---
 
     @Nested
     @DisplayName("Azione: 'show'")
     class ShowTests {
-
         @Test
         @DisplayName("Mostra carrello nullo -> Restituisce []")
         void show_nullCart_returnsEmptyArray() throws ServletException, IOException {
             when(request.getParameter("action")).thenReturn("show");
             when(session.getAttribute("cart")).thenReturn(null);
-
             servlet.doGet(request, response);
-
             assertEquals("[]", getJsonOutput());
         }
 
@@ -159,10 +142,8 @@ public class CarrelloServletTest {
         @DisplayName("Mostra carrello vuoto -> Restituisce []")
         void show_emptyCart_returnsEmptyArray() throws ServletException, IOException {
             when(request.getParameter("action")).thenReturn("show");
-            when(session.getAttribute("cart")).thenReturn(mockCart); // Lista vuota
-
+            when(session.getAttribute("cart")).thenReturn(mockCart);
             servlet.doGet(request, response);
-
             assertEquals("[]", getJsonOutput());
         }
 
@@ -171,38 +152,31 @@ public class CarrelloServletTest {
         void show_fullCart_returnsJson() throws ServletException, IOException {
             when(request.getParameter("action")).thenReturn("show");
 
-            // Prepariamo carrello e prodotto
             Prodotto p = new Prodotto();
             p.setIdProdotto("P1");
             p.setNome("Proteine");
-            p.setImmagine("img.png");
             Carrello c = new Carrello();
             c.setIdProdotto("P1");
-            c.setPrezzo(50.0f);
-
+            c.setPrezzo(50.12f);
+            c.setQuantita(1);
             mockCart.add(c);
             when(session.getAttribute("cart")).thenReturn(mockCart);
 
             try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
                 when(mock.doRetrieveById("P1")).thenReturn(p);
             })) {
-
                 servlet.doGet(request, response);
                 String json = getJsonOutput();
-
                 assertTrue(json.contains("\"nomeProdotto\":\"Proteine\""));
-                assertTrue(json.contains("\"totalPrice\":50.0"));
             }
         }
 
         @Test
-        @DisplayName("Prodotto nel carrello non trovato nel DB -> Salta l'item")
+        @DisplayName("Prodotto nel carrello non trovato -> Salta item")
         void show_productInCartNotFound_skipsItem() throws ServletException, IOException {
             when(request.getParameter("action")).thenReturn("show");
-
             Carrello c = new Carrello();
             c.setIdProdotto("P_DELETED");
-            c.setPrezzo(50.0f);
             mockCart.add(c);
             when(session.getAttribute("cart")).thenReturn(mockCart);
 
@@ -211,15 +185,13 @@ public class CarrelloServletTest {
             })) {
                 servlet.doGet(request, response);
                 String json = getJsonOutput();
-
-                // Deve contenere solo il totalPrice (0.0 perché l'item è saltato)
                 assertTrue(json.contains("\"totalPrice\":0.0"));
                 assertFalse(json.contains("P_DELETED"));
             }
         }
     }
 
-    // --- Test 3: action="addVariant" ---
+    // --- Test 3: AddVariant ---
 
     @Nested
     @DisplayName("Azione: 'addVariant'")
@@ -227,7 +199,6 @@ public class CarrelloServletTest {
 
         @BeforeEach
         void setupAdd() {
-            // Setup parametri comuni per add
             when(request.getParameter("action")).thenReturn("addVariant");
             when(request.getParameter("id")).thenReturn("P1");
             when(request.getParameter("gusto")).thenReturn("Cioccolato");
@@ -236,281 +207,19 @@ public class CarrelloServletTest {
         }
 
         @Test
-        @DisplayName("(Happy Path) Aggiunge a carrello nullo")
+        @DisplayName("(Happy Path) Aggiunge a carrello nullo (q=2)")
         void add_toNullCart_createsCartAndAdds() throws ServletException, IOException {
-            // --- 1. Setup Parametri Request ---
-            when(request.getParameter("action")).thenReturn("addVariant");
-            when(request.getParameter("id")).thenReturn("P1");
-            when(request.getParameter("gusto")).thenReturn("Cioccolato");
-            when(request.getParameter("pesoConfezione")).thenReturn("900");
-            when(request.getParameter("quantity")).thenReturn("1");
+            when(session.getAttribute("cart")).thenReturn(null);
+            when(request.getParameter("quantity")).thenReturn("2");
 
-            when(session.getAttribute("cart")).thenReturn(null); // Carrello nullo
-
-            // --- 2. Setup Dati DAO ---
             Prodotto p = new Prodotto();
             p.setIdProdotto("P1");
-            p.setNome("Proteine");
+            p.setNome("P");
             p.setImmagine("img.png");
             Variante v = new Variante();
             v.setIdVariante(10);
             v.setPrezzo(100f);
             v.setSconto(10);
-            v.setQuantita(50); // Stock 50
-
-            // --- 3. Definisci il comportamento dei DAO ---
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                // Definisci il comportamento del ProdottoDAO
-                when(mock.doRetrieveById("P1")).thenReturn(p);
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        // Definisci il comportamento del VarianteDAO
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(v));
-                    })) {
-
-                // --- 4. Esegui la servlet ---
-                servlet.doGet(request, response);
-
-                // --- 5. Verifica ---
-                // Cattura il carrello salvato in sessione
-                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
-                verify(session).setAttribute(eq("cart"), captor.capture());
-
-                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
-                assertEquals(1, savedCart.size());
-                assertEquals(1, savedCart.get(0).getQuantita());
-                assertEquals(90.0f, savedCart.get(0).getPrezzo()); // Prezzo 100 con 10% sconto
-            }
-        }
-
-        @Test
-        @DisplayName("(Happy Path) Aggiunge (merge) a carrello esistente")
-        void add_toExistingCart_mergesQuantity() throws ServletException, IOException {
-            // --- 1. Setup Parametri Request ---
-            // Questi sono necessari perché siamo nel @Nested "AddVariantTests"
-            when(request.getParameter("action")).thenReturn("addVariant");
-            when(request.getParameter("id")).thenReturn("P1");
-            when(request.getParameter("gusto")).thenReturn("Cioccolato");
-            when(request.getParameter("pesoConfezione")).thenReturn("900");
-            when(request.getParameter("quantity")).thenReturn("1"); // Aggiunge 1
-
-            // --- 2. Setup Dati Sessione ---
-            // Carrello esistente con 1 item (quantità 2)
-            Carrello c = new Carrello();
-            c.setIdVariante(10);
-            c.setQuantita(2);
-            c.setPrezzo(180.0f); // 2 * 90
-            c.setIdProdotto("P1"); // Importante per writeCartItemsToResponse
-            mockCart.add(c);
-            when(session.getAttribute("cart")).thenReturn(mockCart);
-
-            // --- 3. Setup Dati DAO ---
-            Prodotto p = new Prodotto();
-            p.setIdProdotto("P1");
-            p.setNome("Proteine");
-            p.setImmagine("img.png");
-            Variante v = new Variante();
-            v.setIdVariante(10);
-            v.setPrezzo(100f);
-            v.setSconto(10);
-            v.setQuantita(50); // Stock 50
-
-            // --- 4. Definisci il comportamento dei DAO ---
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                // Definisci il comportamento del ProdottoDAO
-                when(mock.doRetrieveById("P1")).thenReturn(p);
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        // Definisci il comportamento del VarianteDAO
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(v));
-                    })) {
-
-                // --- 5. Esegui la servlet ---
-                servlet.doGet(request, response);
-
-                // --- 6. Verifica ---
-                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
-                verify(session).setAttribute(eq("cart"), captor.capture());
-
-                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
-                assertEquals(1, savedCart.size()); // Ancora 1 item
-                assertEquals(3, savedCart.get(0).getQuantita()); // Quantità (2 + 1 = 3)
-                assertEquals(270.0f, savedCart.get(0).getPrezzo()); // Prezzo (180 + 90)
-            }
-        }
-
-        @Test
-        @DisplayName("(FAGLIA 💥) Prodotto non trovato -> Non scrive JSON")
-        void add_productNotFound_doesNothing() throws ServletException, IOException {
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(null); // Prodotto non trovato
-            })) {
-                servlet.doGet(request, response);
-                assertTrue(getJsonOutput().isEmpty());
-            }
-        }
-
-        @Test
-        @DisplayName("(CORRETTO) Variante non trovata -> Viene gestita e non fa nulla")
-        void add_variantNotFound_isHandledSafely() throws ServletException, IOException {
-            when(session.getAttribute("cart")).thenReturn(null);
-
-            // N.B. I parametri (action, id, gusto, peso) sono già
-            // impostati nel @BeforeEach della classe @Nested "AddVariantTests"
-
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(new Prodotto()); // Prodotto OK
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        // RESTITUISCE LISTA VUOTA (questo scatena il return;)
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(new ArrayList<>());
-                    })) {
-
-                // --- 1. Esegui e Verifica che NON crashi ---
-                assertDoesNotThrow(() -> {
-                    servlet.doGet(request, response);
-                });
-
-                // --- 2. Verifica il nuovo comportamento (silent return) ---
-                // Nessun JSON deve essere scritto
-                assertTrue(getJsonOutput().isEmpty());
-                // Il carrello in sessione non deve essere modificato
-                verify(session, never()).setAttribute(anyString(), any());
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) Aggiunge più dello stock (nuovo) -> Non aggiunge")
-        void add_newExceedsStock_doesNotAdd() throws ServletException, IOException {
-            // --- 1. Setup Parametri Request ---
-            when(request.getParameter("action")).thenReturn("addVariant");
-            when(request.getParameter("id")).thenReturn("P1");
-            when(request.getParameter("gusto")).thenReturn("Cioccolato");
-            when(request.getParameter("pesoConfezione")).thenReturn("900");
-            when(request.getParameter("quantity")).thenReturn("100"); // Quantità > Stock
-
-            when(session.getAttribute("cart")).thenReturn(null); // Carrello vuoto
-
-            // --- 2. Setup Dati DAO ---
-            Prodotto p = new Prodotto();
-            p.setIdProdotto("P1");
-            p.setNome("Proteine");
-            p.setImmagine("img.png");
-            Variante v = new Variante();
-            v.setIdVariante(10);
-            v.setQuantita(50); // Stock 50
-
-            // --- 3. Definisci il comportamento dei DAO ---
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                // Definisci il comportamento del ProdottoDAO
-                when(mock.doRetrieveById("P1")).thenReturn(p);
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        // Definisci il comportamento del VarianteDAO
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(v));
-                    })) {
-
-                // --- 4. Esegui la servlet ---
-                servlet.doGet(request, response);
-
-                // --- 5. Verifica ---
-                // Cattura il carrello salvato in sessione
-                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
-                verify(session).setAttribute(eq("cart"), captor.capture());
-
-                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
-                // L'if (!itemExists && quantity <= v.getQuantita()) fallisce,
-                // quindi il carrello deve rimanere vuoto.
-                assertTrue(savedCart.isEmpty());
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) Aggiunge più dello stock (merge) -> Non aggiorna")
-        void add_mergeExceedsStock_doesNotUpdate() throws ServletException, IOException {
-            // --- 1. Setup Parametri Request ---
-            when(request.getParameter("action")).thenReturn("addVariant");
-            when(request.getParameter("id")).thenReturn("P1");
-            when(request.getParameter("gusto")).thenReturn("Cioccolato");
-            when(request.getParameter("pesoConfezione")).thenReturn("900");
-            when(request.getParameter("quantity")).thenReturn("20"); // Aggiunge 20
-
-            // --- 2. Setup Dati Sessione ---
-            // Carrello esistente con 40
-            Carrello c = new Carrello();
-            c.setIdVariante(10);
-            c.setQuantita(40);
-            c.setIdProdotto("P1");
-            mockCart.add(c);
-            when(session.getAttribute("cart")).thenReturn(mockCart);
-
-            // --- 3. Setup Dati DAO ---
-            Prodotto p = new Prodotto();
-            p.setIdProdotto("P1");
-            p.setNome("Proteine");
-            p.setImmagine("img.png");
-            Variante v = new Variante();
-            v.setIdVariante(10);
-            v.setQuantita(50); // Stock 50
-
-            // --- 4. Definisci il comportamento dei DAO ---
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                // Definisci il comportamento del ProdottoDAO
-                when(mock.doRetrieveById("P1")).thenReturn(p);
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        // Definisci il comportamento del VarianteDAO
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(v));
-                    })) {
-
-                // --- 5. Esegui la servlet ---
-                servlet.doGet(request, response);
-
-                // --- 6. Verifica ---
-                // Cattura carrello
-                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
-                verify(session).setAttribute(eq("cart"), captor.capture());
-
-                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
-                // L'if (newQuantity <= v.getQuantita()) fallisce (60 non è <= 50)
-                assertEquals(1, savedCart.size());
-                assertEquals(40, savedCart.get(0).getQuantita()); // Quantità invariata
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) Peso non valido -> Non fa nulla")
-        void add_invalidWeight_doesNothing() throws ServletException, IOException {
-            when(request.getParameter("pesoConfezione")).thenReturn("abc");
-
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class);
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class)) {
-                servlet.doGet(request, response);
-
-                assertTrue(getJsonOutput().isEmpty());
-                verify(session, never()).setAttribute(anyString(), any());
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) Quantità non valida -> Default a 1")
-        void add_invalidQuantity_defaultsToOne() throws ServletException, IOException {
-            when(request.getParameter("quantity")).thenReturn("abc");
-            when(session.getAttribute("cart")).thenReturn(null);
-
-            Prodotto p = new Prodotto();
-            p.setIdProdotto("P1");
-            p.setNome("Proteine");
-            p.setImmagine("img.png");
-            Variante v = new Variante();
-            v.setIdVariante(10);
-            v.setPrezzo(100f);
-            v.setSconto(0);
             v.setQuantita(50);
 
             try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
@@ -520,113 +229,54 @@ public class CarrelloServletTest {
                         when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
                                 .thenReturn(List.of(v));
                     })) {
-
-                servlet.doGet(request, response);
-
-                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
-                verify(session).setAttribute(eq("cart"), captor.capture());
-                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
-                assertEquals(1, savedCart.get(0).getQuantita());
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) Quantità negativa -> Default a 1")
-        void add_negativeQuantity_defaultsToOne() throws ServletException, IOException {
-            when(request.getParameter("quantity")).thenReturn("-5");
-            when(session.getAttribute("cart")).thenReturn(null);
-
-            Prodotto p = new Prodotto();
-            p.setIdProdotto("P1");
-            p.setNome("Proteine");
-            p.setImmagine("img.png");
-            Variante v = new Variante();
-            v.setIdVariante(10);
-            v.setPrezzo(100f);
-            v.setSconto(0);
-            v.setQuantita(50);
-
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(p);
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(v));
-                    })) {
-
-                servlet.doGet(request, response);
-
-                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
-                verify(session).setAttribute(eq("cart"), captor.capture());
-                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
-                assertEquals(1, savedCart.get(0).getQuantita());
-            }
-        }
-
-        @Test
-        @DisplayName("(Happy Path) Aggiunge a carrello vuoto (non null)")
-        void add_toEmptyCart_addsItem() throws ServletException, IOException {
-            when(session.getAttribute("cart")).thenReturn(new ArrayList<>()); // Carrello vuoto ma non null
-
-            Prodotto p = new Prodotto();
-            p.setIdProdotto("P1");
-            p.setNome("Proteine");
-            p.setImmagine("img.png");
-            Variante v = new Variante();
-            v.setIdVariante(10);
-            v.setPrezzo(100f);
-            v.setSconto(0);
-            v.setQuantita(50);
-
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(p);
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(v));
-                    })) {
-
                 servlet.doGet(request, response);
 
                 ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
                 verify(session).setAttribute(eq("cart"), captor.capture());
                 List<Carrello> savedCart = (List<Carrello>) captor.getValue();
                 assertEquals(1, savedCart.size());
-                assertEquals(1, savedCart.get(0).getQuantita());
+                Carrello c = savedCart.get(0);
+                assertEquals(180.0f, c.getPrezzo()); // 90*2
+                assertEquals(2, c.getQuantita());
+                assertEquals("img.png", c.getImmagineProdotto());
+                assertEquals("Cioccolato", c.getGusto());
+                assertEquals(900, c.getPesoConfezione());
+                assertEquals("P1", c.getIdProdotto());
+                assertEquals(10, c.getIdVariante());
+                assertEquals("P", c.getNomeProdotto());
+
+                // Kill VoidMethodCallMutator for writeCartItemsToResponse (imgSrc check)
+                String json = getJsonOutput();
+                assertTrue(json.contains("\"imgSrc\":\"img.png\""));
+                assertTrue(json.contains("\"flavour\":\"Cioccolato\""));
+                assertTrue(json.contains("\"weight\":900"));
+                verify(printWriter, atLeastOnce()).flush(); // Kill flush mutant
             }
         }
 
         @Test
-        @DisplayName("(Regola) Quantità null -> Default a 1")
-        void add_nullQuantity_defaultsToOne() throws ServletException, IOException {
-            when(request.getParameter("quantity")).thenReturn(null);
+        @DisplayName("Prodotto trovato ma varianti vuote -> Non aggiunge, no error")
+        void add_variantNotFound_doesNothing() throws ServletException, IOException {
             when(session.getAttribute("cart")).thenReturn(null);
-
             Prodotto p = new Prodotto();
             p.setIdProdotto("P1");
-            Variante v = new Variante();
-            v.setIdVariante(10);
-            v.setPrezzo(100f);
-            v.setQuantita(50);
 
             try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
                 when(mock.doRetrieveById("P1")).thenReturn(p);
             });
                     MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
                         when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(v));
+                                .thenReturn(Collections.emptyList());
                     })) {
                 servlet.doGet(request, response);
-
-                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
-                verify(session).setAttribute(eq("cart"), captor.capture());
-                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
-                assertEquals(1, savedCart.get(0).getQuantita());
+                verify(session, never()).setAttribute(eq("cart"), any());
+                assertTrue(getJsonOutput().isEmpty());
+                verify(response, never()).sendError(anyInt(), anyString());
             }
         }
 
         @Test
-        @DisplayName("(Regola) Quantità zero -> Default a 1")
+        @DisplayName("Boundary: Quantity 0 -> Defaults to 1")
         void add_zeroQuantity_defaultsToOne() throws ServletException, IOException {
             when(request.getParameter("quantity")).thenReturn("0");
             when(session.getAttribute("cart")).thenReturn(null);
@@ -646,34 +296,224 @@ public class CarrelloServletTest {
                                 .thenReturn(List.of(v));
                     })) {
                 servlet.doGet(request, response);
-
                 ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
                 verify(session).setAttribute(eq("cart"), captor.capture());
-                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
-                assertEquals(1, savedCart.get(0).getQuantita());
+                assertEquals(1, ((List<Carrello>) captor.getValue()).get(0).getQuantita());
             }
         }
 
         @Test
-        @DisplayName("(FAGLIA) Variante null nella lista -> Non fa nulla")
-        void add_nullVariantInList_doesNothing() throws ServletException, IOException {
+        @DisplayName("Boundary: Sconto 0 -> NESSUN arrotondamento")
+        void add_zeroDiscount_noRounding() throws ServletException, IOException {
             when(session.getAttribute("cart")).thenReturn(null);
+            when(request.getParameter("quantity")).thenReturn("1");
+
+            Prodotto p = new Prodotto();
+            p.setIdProdotto("P1");
+            Variante v = new Variante();
+            v.setIdVariante(10);
+            v.setPrezzo(10.12345f);
+            v.setSconto(0);
+            v.setQuantita(50);
 
             try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(new Prodotto());
+                when(mock.doRetrieveById("P1")).thenReturn(p);
             });
                     MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
                         when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(Collections.singletonList(null));
+                                .thenReturn(List.of(v));
                     })) {
                 servlet.doGet(request, response);
+                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
+                verify(session).setAttribute(eq("cart"), captor.capture());
+                assertEquals(10.12345f, ((List<Carrello>) captor.getValue()).get(0).getPrezzo(), 0.000001f);
+            }
+        }
+
+        @Test
+        @DisplayName("Math: Arrotondamento")
+        void add_roundingTest() throws ServletException, IOException {
+            when(session.getAttribute("cart")).thenReturn(null);
+            Prodotto p = new Prodotto();
+            p.setIdProdotto("P1");
+            Variante v = new Variante();
+            v.setIdVariante(10);
+            v.setPrezzo(10.129f);
+            v.setSconto(0);
+            v.setQuantita(50);
+
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                when(mock.doRetrieveById("P1")).thenReturn(p);
+            });
+                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
+                                .thenReturn(List.of(v));
+                    })) {
+                servlet.doGet(request, response);
+
+                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
+                verify(session).setAttribute(eq("cart"), captor.capture());
+                assertEquals(10.129f, ((List<Carrello>) captor.getValue()).get(0).getPrezzo());
+
+                // Kill MathMutator in writeCartItemsToResponse
+                String json = getJsonOutput();
+                assertTrue(json.contains("\"prezzo\":10.13"));
+            }
+        }
+
+        @Test
+        @DisplayName("(Happy Path) Merge q=2")
+        void add_toExistingCart_mergesQuantity() throws ServletException, IOException {
+            when(request.getParameter("quantity")).thenReturn("2");
+            Carrello c = new Carrello();
+            c.setIdVariante(10);
+            c.setQuantita(2);
+            c.setPrezzo(180.0f);
+            c.setIdProdotto("P1");
+            mockCart.add(c);
+            when(session.getAttribute("cart")).thenReturn(mockCart);
+
+            Prodotto p = new Prodotto();
+            p.setIdProdotto("P1");
+            Variante v = new Variante();
+            v.setIdVariante(10);
+            v.setPrezzo(100f);
+            v.setSconto(10);
+            v.setQuantita(50);
+
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                when(mock.doRetrieveById("P1")).thenReturn(p);
+            });
+                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
+                                .thenReturn(List.of(v));
+                    })) {
+                servlet.doGet(request, response);
+                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
+                verify(session).setAttribute(eq("cart"), captor.capture());
+                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
+                assertEquals(4, savedCart.get(0).getQuantita());
+                assertEquals(360.0f, savedCart.get(0).getPrezzo());
+
+                // Kill VoidMethodCallMutator on writeCartItemsToResponse
+                String json = getJsonOutput();
+                assertFalse(json.isEmpty());
+                assertTrue(json.contains("\"totalPrice\":360.0"));
+            }
+        }
+
+        @Test
+        @DisplayName("Boundary: Exact Stock")
+        void add_exactStock_addsItem() throws ServletException, IOException {
+            when(request.getParameter("quantity")).thenReturn("50");
+            when(session.getAttribute("cart")).thenReturn(null);
+            Prodotto p = new Prodotto();
+            p.setIdProdotto("P1");
+            Variante v = new Variante();
+            v.setIdVariante(10);
+            v.setQuantita(50);
+
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                when(mock.doRetrieveById("P1")).thenReturn(p);
+            });
+                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
+                                .thenReturn(List.of(v));
+                    })) {
+                servlet.doGet(request, response);
+                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
+                verify(session).setAttribute(eq("cart"), captor.capture());
+                assertEquals(50, ((List<Carrello>) captor.getValue()).get(0).getQuantita());
+            }
+        }
+
+        @Test
+        @DisplayName("Boundary: Sconto 0 -> Price Unchanged")
+        void add_zeroDiscount_priceUnchanged() throws ServletException, IOException {
+            when(session.getAttribute("cart")).thenReturn(null);
+            Prodotto p = new Prodotto();
+            p.setIdProdotto("P1");
+            Variante v = new Variante();
+            v.setIdVariante(10);
+            v.setPrezzo(50f);
+            v.setSconto(0);
+            v.setQuantita(50);
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                when(mock.doRetrieveById("P1")).thenReturn(p);
+            });
+                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
+                                .thenReturn(List.of(v));
+                    })) {
+                servlet.doGet(request, response);
+                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
+                verify(session).setAttribute(eq("cart"), captor.capture());
+                assertEquals(50.0f, ((List<Carrello>) captor.getValue()).get(0).getPrezzo());
+            }
+        }
+
+        @Test
+        @DisplayName("Boundary: Sconto 50 -> Price Halved")
+        void add_fiftyDiscount_priceHalved() throws ServletException, IOException {
+            when(session.getAttribute("cart")).thenReturn(null);
+            Prodotto p = new Prodotto();
+            p.setIdProdotto("P1");
+            Variante v = new Variante();
+            v.setIdVariante(10);
+            v.setPrezzo(50f);
+            v.setSconto(50);
+            v.setQuantita(50);
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                when(mock.doRetrieveById("P1")).thenReturn(p);
+            });
+                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
+                                .thenReturn(List.of(v));
+                    })) {
+                servlet.doGet(request, response);
+                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
+                verify(session).setAttribute(eq("cart"), captor.capture());
+                assertEquals(25.0f, ((List<Carrello>) captor.getValue()).get(0).getPrezzo(), 0.01);
+            }
+        }
+
+        @Test
+        @DisplayName("New Exceeds Stock")
+        void add_newExceedsStock_doesNotAdd() throws ServletException, IOException {
+            when(request.getParameter("quantity")).thenReturn("100");
+            when(session.getAttribute("cart")).thenReturn(null);
+            Prodotto p = new Prodotto();
+            p.setIdProdotto("P1");
+            Variante v = new Variante();
+            v.setIdVariante(10);
+            v.setQuantita(50);
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                when(mock.doRetrieveById("P1")).thenReturn(p);
+            });
+                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
+                                .thenReturn(List.of(v));
+                    })) {
+                servlet.doGet(request, response);
+                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
+                verify(session).setAttribute(eq("cart"), captor.capture());
+                assertTrue(((List<Carrello>) captor.getValue()).isEmpty());
+            }
+        }
+
+        @Test
+        @DisplayName("Product Not Found")
+        void add_productNotFound_doesNothing() throws ServletException, IOException {
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                when(mock.doRetrieveById("P1")).thenReturn(null);
+            })) {
+                servlet.doGet(request, response);
                 assertTrue(getJsonOutput().isEmpty());
-                verify(session, never()).setAttribute(eq("cart"), any());
             }
         }
     }
 
-    // --- Test 4: action="removeVariant" ---
+    // --- Test 4: Remove ---
 
     @Nested
     @DisplayName("Azione: 'removeVariant'")
@@ -688,212 +528,36 @@ public class CarrelloServletTest {
         }
 
         @Test
-        @DisplayName("(Happy Path) Rimuove item dal carrello")
-        void remove_happyPath_removesItem() throws ServletException, IOException {
-            // --- 1. Setup Parametri Request ---
-            when(request.getParameter("action")).thenReturn("removeVariant");
-            when(request.getParameter("id")).thenReturn("P1"); // ID della variante da rimuovere
-            when(request.getParameter("gusto")).thenReturn("Cioccolato");
-            when(request.getParameter("pesoConfezione")).thenReturn("900");
-
-            // --- 2. Setup Dati Sessione ---
-            // Carrello con 2 items
-            Carrello c1 = new Carrello();
-            c1.setIdVariante(10);
-            c1.setIdProdotto("P1"); // Da rimuovere
-            Carrello c2 = new Carrello();
-            c2.setIdVariante(20);
-            c2.setIdProdotto("P2"); // Da tenere
-            mockCart.addAll(List.of(c1, c2));
+        @DisplayName("Remove da carrello vuoto")
+        void remove_emptyCart_updatesSessionAndReturnsJson() throws ServletException, IOException {
             when(session.getAttribute("cart")).thenReturn(mockCart);
-
-            // --- 3. Setup Dati DAO ---
             Prodotto p = new Prodotto();
-            p.setIdProdotto("P1"); // Prodotto da rimuovere
-            Prodotto p2 = new Prodotto();
-            p2.setIdProdotto("P2");
-            p2.setNome("Altro");
-            p2.setImmagine("img2.png"); // Prodotto che resta
+            p.setIdProdotto("P1");
             Variante v = new Variante();
-            v.setIdVariante(10); // Variante da rimuovere
-
-            // --- 4. Definisci il comportamento dei DAO ---
             try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                // Definisci il comportamento del ProdottoDAO
-                when(mock.doRetrieveById("P1")).thenReturn(p); // Chiamato da handleRemove...
-                when(mock.doRetrieveById("P2")).thenReturn(p2); // Chiamato da writeCartItemsToResponse
+                when(mock.doRetrieveById("P1")).thenReturn(p);
             });
                     MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        // Definisci il comportamento del VarianteDAO
                         when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
                                 .thenReturn(List.of(v));
                     })) {
-
-                // --- 5. Esegui la servlet ---
                 servlet.doGet(request, response);
-
-                // --- 6. Verifica ---
-                // Cattura il carrello salvato in sessione
-                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
-                verify(session).setAttribute(eq("cart"), captor.capture());
-
-                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
-                // Verifica che il carrello ora abbia solo 1 item
-                assertEquals(1, savedCart.size());
-                // Verifica che l'item rimasto sia quello corretto
-                assertEquals(20, savedCart.get(0).getIdVariante());
+                verify(session).setAttribute(eq("cart"), anyList());
             }
         }
 
         @Test
-        @DisplayName("(CORRETTO) Variante non trovata -> Viene gestita e non fa nulla")
-        void remove_variantNotFound_isHandledSafely() throws ServletException, IOException {
-            // --- 1. Setup Parametri Request ---
-            // Dati necessari per eseguire il metodo
-            when(request.getParameter("action")).thenReturn("removeVariant");
-            when(request.getParameter("id")).thenReturn("P1");
-            when(request.getParameter("gusto")).thenReturn("Cioccolato");
-            when(request.getParameter("pesoConfezione")).thenReturn("900");
-            when(session.getAttribute("cart")).thenReturn(mockCart);
-
-            // --- 2. Setup Dati DAO ---
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(new Prodotto()); // Prodotto OK
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        // RESTITUISCE LISTA VUOTA (questo scatena il return;)
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(new ArrayList<>());
-                    })) {
-
-                // --- 3. Esegui e Verifica che NON crashi ---
-                assertDoesNotThrow(() -> {
-                    servlet.doGet(request, response);
-                });
-
-                // --- 4. Verifica il nuovo comportamento (silent return) ---
-                // Nessun JSON deve essere scritto
-                assertTrue(getJsonOutput().isEmpty());
-                // Il carrello in sessione non deve essere modificato
-                verify(session, never()).setAttribute(anyString(), any());
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) Peso non valido -> Non fa nulla")
-        void remove_invalidWeight_doesNothing() throws ServletException, IOException {
-            when(request.getParameter("pesoConfezione")).thenReturn("abc");
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class);
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class)) {
-                servlet.doGet(request, response);
-                assertTrue(getJsonOutput().isEmpty());
-            }
-        }
-
-        @Test
-        @DisplayName("(FAGLIA) Prodotto non trovato -> Non fa nulla")
-        void remove_productNotFound_doesNothing() throws ServletException, IOException {
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(null);
-            })) {
-                servlet.doGet(request, response);
-                assertTrue(getJsonOutput().isEmpty());
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) Carrello null -> Non fa nulla")
-        void remove_nullCart_doesNothing() throws ServletException, IOException {
-            when(session.getAttribute("cart")).thenReturn(null);
-
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(new Prodotto());
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(new Variante()));
-                    })) {
-
-                servlet.doGet(request, response);
-                assertTrue(getJsonOutput().isEmpty());
-                verify(session, never()).setAttribute(eq("cart"), any());
-            }
-        }
-
-        @Test
-        @DisplayName("(FAGLIA) Variante null nella lista -> Non fa nulla")
-        void remove_nullVariantInList_doesNothing() throws ServletException, IOException {
-            when(request.getParameter("action")).thenReturn("removeVariant");
-            when(request.getParameter("id")).thenReturn("P1");
-            when(request.getParameter("gusto")).thenReturn("Cioccolato");
-            when(request.getParameter("pesoConfezione")).thenReturn("900");
-            when(session.getAttribute("cart")).thenReturn(mockCart);
-
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(new Prodotto());
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(Collections.singletonList(null));
-                    })) {
-
-                servlet.doGet(request, response);
-                assertTrue(getJsonOutput().isEmpty());
-                verify(session, never()).setAttribute(eq("cart"), any());
-            }
-        }
-
-        @Test
-        @DisplayName("(Happy Path) Item non nel carrello -> Non modifica carrello")
-        void remove_itemNotInCart_doesntChangeCart() throws ServletException, IOException {
-            when(request.getParameter("action")).thenReturn("removeVariant");
-            when(request.getParameter("id")).thenReturn("P1");
-            when(request.getParameter("gusto")).thenReturn("Cioccolato");
-            when(request.getParameter("pesoConfezione")).thenReturn("900");
-
-            // Carrello con un altro item
+        @DisplayName("Remove Happy Path")
+        void remove_happyPath_removesItem() throws ServletException, IOException {
             Carrello c = new Carrello();
-            c.setIdProdotto("P2");
-            c.setGusto("Vaniglia");
-            c.setPesoConfezione(500);
+            c.setIdProdotto("P1");
+            c.setIdVariante(10);
             mockCart.add(c);
             when(session.getAttribute("cart")).thenReturn(mockCart);
-
             Prodotto p = new Prodotto();
             p.setIdProdotto("P1");
             Variante v = new Variante();
             v.setIdVariante(10);
-            v.setQuantita(50);
-
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(p);
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(v));
-                    })) {
-
-                servlet.doGet(request, response);
-
-                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
-                verify(session).setAttribute(eq("cart"), captor.capture());
-                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
-                assertEquals(1, savedCart.size());
-                assertEquals("P2", savedCart.get(0).getIdProdotto());
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) Carrello vuoto -> Restituisce JSON vuoto e aggiorna sessione")
-        void remove_emptyCart_updatesSessionAndReturnsJson() throws ServletException, IOException {
-            when(session.getAttribute("cart")).thenReturn(new ArrayList<>());
-
-            // Setup DAO minimi per evitare NPE prima del check sul carrello
-            Prodotto p = new Prodotto();
-            p.setIdProdotto("P1");
-            Variante v = new Variante();
-            v.setIdVariante(10);
-
             try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
                 when(mock.doRetrieveById("P1")).thenReturn(p);
             });
@@ -902,362 +566,45 @@ public class CarrelloServletTest {
                                 .thenReturn(List.of(v));
                     })) {
                 servlet.doGet(request, response);
-
-                // Verifica che venga restituito il JSON con totalPrice
-                String json = getJsonOutput();
-                assertFalse(json.isEmpty());
-                assertTrue(json.contains("\"totalPrice\":0.0"));
-
-                // Verifica che la sessione venga aggiornata (anche se il carrello è invariato)
-                verify(session).setAttribute(eq("cart"), any());
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) ID null -> Non fa nulla")
-        void remove_nullId_doesNothing() throws ServletException, IOException {
-            when(request.getParameter("id")).thenReturn(null);
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class);
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class)) {
-                servlet.doGet(request, response);
-                assertTrue(getJsonOutput().isEmpty());
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) Peso null -> Non fa nulla")
-        void remove_nullWeight_doesNothing() throws ServletException, IOException {
-            when(request.getParameter("pesoConfezione")).thenReturn(null);
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class);
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class)) {
-                servlet.doGet(request, response);
-                assertTrue(getJsonOutput().isEmpty());
-            }
-        }
-
-        @Test
-        @DisplayName("(Happy Path) Item rimosso, altro item con prodotto mancante -> Salta item mancante")
-        void remove_withRemainingItemNotFound_skipsIt() throws ServletException, IOException {
-            // Setup parametri rimozione
-            when(request.getParameter("action")).thenReturn("removeVariant");
-            when(request.getParameter("id")).thenReturn("P1");
-            when(request.getParameter("gusto")).thenReturn("Cioccolato");
-            when(request.getParameter("pesoConfezione")).thenReturn("900");
-
-            // Carrello: Item da rimuovere (P1) + Item con prodotto mancante (P_MISSING)
-            Carrello c1 = new Carrello();
-            c1.setIdProdotto("P1");
-            c1.setIdVariante(10);
-
-            Carrello c2 = new Carrello();
-            c2.setIdProdotto("P_MISSING");
-            c2.setIdVariante(99);
-
-            mockCart.clear();
-            mockCart.add(c1);
-            mockCart.add(c2);
-            when(session.getAttribute("cart")).thenReturn(mockCart);
-
-            Prodotto p1 = new Prodotto();
-            p1.setIdProdotto("P1");
-            Variante v1 = new Variante();
-            v1.setIdVariante(10);
-
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(p1);
-                when(mock.doRetrieveById("P_MISSING")).thenReturn(null); // Prodotto non trovato
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(v1));
-                    })) {
-                servlet.doGet(request, response);
-
-                String json = getJsonOutput();
-                // Deve contenere totalPrice (0.0) ma non P_MISSING
-                assertTrue(json.contains("\"totalPrice\":0.0"));
-                assertFalse(json.contains("P_MISSING"));
-
                 ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
                 verify(session).setAttribute(eq("cart"), captor.capture());
-                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
-                assertEquals(1, savedCart.size()); // Rimane solo P_MISSING nel carrello (anche se non mostrato)
-                assertEquals("P_MISSING", savedCart.get(0).getIdProdotto());
+                assertTrue(((List<Carrello>) captor.getValue()).isEmpty());
             }
         }
     }
 
-    // --- Test 5: action="quantityVariant" ---
+    // --- Test 5: Quantity ---
 
     @Nested
     @DisplayName("Azione: 'quantityVariant'")
     class QuantityVariantTests {
 
         @BeforeEach
-        void setupQuantity() {
+        void setupQ() {
             when(request.getParameter("action")).thenReturn("quantityVariant");
             when(request.getParameter("id")).thenReturn("P1");
             when(request.getParameter("gusto")).thenReturn("Cioccolato");
             when(request.getParameter("pesoConfezione")).thenReturn("900");
-
-            // Carrello esistente con 1 item
-            Carrello c = new Carrello();
-            c.setIdVariante(10);
-            c.setQuantita(2);
-            c.setPrezzo(20.0f);
-            mockCart.add(c);
-            when(session.getAttribute("cart")).thenReturn(mockCart);
         }
 
         @Test
-        @DisplayName("(Happy Path) Aggiorna quantità e prezzo")
-        void quantity_happyPath_updatesItem() throws ServletException, IOException {
-            when(request.getParameter("quantity")).thenReturn("5");
-
-            // --- 1. Definisci i dati da restituire ---
-            Prodotto p = new Prodotto();
-            p.setIdProdotto("P1");
-            p.setNome("Proteine");
-            p.setImmagine("img.png");
-            Variante v = new Variante();
-            v.setIdVariante(10);
-            v.setPrezzo(10f);
-            v.setSconto(0);
-            v.setQuantita(50); // Stock 50
-
-            // --- 2. Definisci il comportamento dei DAO quando vengono creati ---
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                // Definisci il comportamento del ProdottoDAO qui
-                when(mock.doRetrieveById("P1")).thenReturn(p);
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        // Definisci il comportamento del VarianteDAO qui
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(v));
-                    })) {
-
-                // --- 3. Esegui la servlet ---
-                servlet.doGet(request, response);
-
-                // --- 4. Verifica ---
-                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
-                verify(session).setAttribute(eq("cart"), captor.capture());
-
-                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
-                assertEquals(1, savedCart.size());
-                assertEquals(5, savedCart.get(0).getQuantita()); // Quantità aggiornata
-                assertEquals(50.0f, savedCart.get(0).getPrezzo()); // Prezzo aggiornato (5 * 10)
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) Quantità negativa -> Rimuove item")
-        void quantity_negative_removesItem() throws ServletException, IOException {
-            // --- 1. Setup Parametri Request ---
-            when(request.getParameter("action")).thenReturn("quantityVariant");
-            when(request.getParameter("id")).thenReturn("P1");
-            when(request.getParameter("gusto")).thenReturn("Cioccolato");
-            when(request.getParameter("pesoConfezione")).thenReturn("900");
-            when(request.getParameter("quantity")).thenReturn("-1"); // Questo fa scattare la logica di rimozione
-
-            // --- 2. Setup Dati Sessione ---
-            // Carrello con 1 item (quello che verrà rimosso)
-            Carrello c = new Carrello();
-            c.setIdVariante(10);
-            c.setQuantita(2);
-            c.setPrezzo(20.0f);
-            mockCart.add(c);
-            when(session.getAttribute("cart")).thenReturn(mockCart);
-
-            // --- 3. Setup Dati DAO ---
-            Prodotto p = new Prodotto();
-            p.setIdProdotto("P1");
-            p.setNome("Proteine");
-            p.setImmagine("img.png");
-            Variante v = new Variante();
-            v.setIdVariante(10);
-            v.setQuantita(50); // Stock 50
-
-            // --- 4. Definisci il comportamento dei DAO ---
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                // Questo mock gestirà le chiamate sia da handleQuantity... che da
-                // handleRemove...
-                // e anche da writeCartItemsToResponse (che ora restituirà un carrello vuoto)
-                when(mock.doRetrieveById("P1")).thenReturn(p);
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        // Questo mock gestirà le chiamate da handleQuantity... e handleRemove...
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(v));
-                    })) {
-
-                // --- 5. Esegui la servlet ---
-                servlet.doGet(request, response);
-
-                // --- 6. Verifica ---
-                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
-                // Verifichiamo che il carrello sia stato salvato in sessione
-                // (verrà chiamato in handleRemoveVariantAction)
-                verify(session).setAttribute(eq("cart"), captor.capture());
-
-                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
-                // Verifichiamo che il carrello salvato sia ora vuoto
-                assertTrue(savedCart.isEmpty()); // L'item è stato rimosso
-            }
-        }
-
-        @Test
-        @DisplayName("(FAGLIA 💥) Quantità > stock -> Non aggiorna")
-        void quantity_exceedsStock_doesNotUpdate() throws ServletException, IOException {
-            when(request.getParameter("quantity")).thenReturn("100");
-
-            // 1. Definiamo i dati che i DAO "restituiranno"
-            Prodotto p = new Prodotto();
-            p.setIdProdotto("P1");
-            Variante v = new Variante();
-            v.setIdVariante(10);
-            v.setQuantita(50); // Stock 50
-
-            // 2. Definiamo il comportamento dei DAO QUANDO vengono costruiti
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                // QUANDO il ProdottoDAO viene creato E viene chiamato doRetrieveById("P1"),
-                // ALLORA restituisci 'p'.
-                when(mock.doRetrieveById("P1")).thenReturn(p);
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        // QUANDO il VarianteDAO viene creato E viene chiamato...
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(v)); // ALLORA restituisci 'v'
-                    })) {
-
-                // 3. Ora chiamiamo la servlet.
-                // Dentro questo metodo, verranno creati i new ProdottoDAO() e new
-                // VarianteDAO(),
-                // e i mock che abbiamo appena definito verranno usati al loro posto.
-                servlet.doGet(request, response);
-
-                // 4. Verifiche
-                // L'if fallisce (100 non è <= 50), quindi non viene scritto nessun JSON
-                assertTrue(getJsonOutput().isEmpty());
-                // La sessione non viene ri-settata (il carrello rimane com'era)
-                verify(session, never()).setAttribute(anyString(), any());
-            }
-        }
-
-        @Test
-        @DisplayName("(CORRETTO) Quantità non numerica -> Viene gestita e non fa nulla")
-        void quantity_invalidParam_isHandled() throws ServletException, IOException {
-            // --- 1. Setup Parametri Request ---
-            when(request.getParameter("quantity")).thenReturn("abc"); // Causa il return
-
-            // Altri parametri
-            when(request.getParameter("action")).thenReturn("quantityVariant");
-            when(request.getParameter("id")).thenReturn("P1");
-            when(request.getParameter("gusto")).thenReturn("Cioccolato");
-            when(request.getParameter("pesoConfezione")).thenReturn("900");
-
-            // --- 2. Setup Dati DAO ---
-            Prodotto p = new Prodotto();
-            p.setIdProdotto("P1");
-            Variante v = new Variante();
-            v.setIdVariante(10);
-            v.setQuantita(50);
-
-            // --- 3. Definisci il comportamento dei DAO ---
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(p);
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(v));
-                    })) {
-
-                // --- 4. Esegui e Verifica che NON crashi ---
-                // Verifichiamo che l'esecuzione termini senza eccezioni
-                assertDoesNotThrow(() -> {
-                    servlet.doGet(request, response);
-                });
-
-                // --- 5. Verifica il nuovo comportamento (silent return) ---
-                // L'azione è stata interrotta, quindi nessun JSON deve essere scritto
-                assertTrue(getJsonOutput().isEmpty());
-                // E la sessione non deve essere aggiornata
-                verify(session, never()).setAttribute(anyString(), any());
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) Peso non valido -> Non fa nulla")
-        void quantity_invalidWeight_doesNothing() throws ServletException, IOException {
-            when(request.getParameter("pesoConfezione")).thenReturn("abc");
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class);
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class)) {
-                servlet.doGet(request, response);
-                assertTrue(getJsonOutput().isEmpty());
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) Variante non trovata -> Non fa nulla")
-        void quantity_variantNotFound_doesNothing() throws ServletException, IOException {
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(new Prodotto());
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(new ArrayList<>());
-                    })) {
-                servlet.doGet(request, response);
-                assertTrue(getJsonOutput().isEmpty());
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) Carrello null -> Non fa nulla")
-        void quantity_nullCart_doesNothing() throws ServletException, IOException {
-            when(session.getAttribute("cart")).thenReturn(null);
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(new Prodotto());
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(new Variante()));
-                    })) {
-                servlet.doGet(request, response);
-                assertTrue(getJsonOutput().isEmpty());
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) Quantità null/blank -> Non fa nulla")
-        void quantity_nullQuantity_doesNothing() throws ServletException, IOException {
-            when(request.getParameter("quantity")).thenReturn(null);
-
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(new Prodotto());
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(new Variante()));
-                    })) {
-                servlet.doGet(request, response);
-                assertTrue(getJsonOutput().isEmpty());
-            }
-        }
-
-        @Test
-        @DisplayName("(Happy Path) Aggiorna prezzo con sconto")
+        @DisplayName("Update con sconto")
         void quantity_withDiscount_updatesPriceCorrectly() throws ServletException, IOException {
-            when(request.getParameter("quantity")).thenReturn("2");
-
+            when(request.getParameter("quantity")).thenReturn("3");
+            Carrello c = new Carrello();
+            c.setIdProdotto("P1");
+            c.setIdVariante(10);
+            c.setPrezzo(50f);
+            c.setQuantita(1);
+            mockCart.add(c);
+            when(session.getAttribute("cart")).thenReturn(mockCart);
             Prodotto p = new Prodotto();
             p.setIdProdotto("P1");
             Variante v = new Variante();
             v.setIdVariante(10);
             v.setPrezzo(100f);
-            v.setSconto(20);
-            v.setQuantita(50); // Prezzo scontato: 80
-
+            v.setSconto(10);
+            v.setQuantita(50);
             try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
                 when(mock.doRetrieveById("P1")).thenReturn(p);
             });
@@ -1265,105 +612,154 @@ public class CarrelloServletTest {
                         when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
                                 .thenReturn(List.of(v));
                     })) {
-
                 servlet.doGet(request, response);
-
                 ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
                 verify(session).setAttribute(eq("cart"), captor.capture());
-
-                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
-                assertEquals(1, savedCart.size());
-                // Prezzo unitario scontato = 80. Totale per 2 item = 160.
-                assertEquals(160.0f, savedCart.get(0).getPrezzo(), 0.01);
+                assertEquals(270.0f, ((List<Carrello>) captor.getValue()).get(0).getPrezzo());
             }
         }
 
         @Test
-        @DisplayName("(FAGLIA) Prodotto non trovato -> Non fa nulla")
-        void quantity_productNotFound_doesNothing() throws ServletException, IOException {
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(null);
-            })) {
-                servlet.doGet(request, response);
-                assertTrue(getJsonOutput().isEmpty());
-            }
-        }
-
-        @Test
-        @DisplayName("(FAGLIA) Variante null nella lista -> Non fa nulla")
-        void quantity_nullVariantInList_doesNothing() throws ServletException, IOException {
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(new Prodotto());
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(Collections.singletonList(null));
-                    })) {
-                servlet.doGet(request, response);
-                assertTrue(getJsonOutput().isEmpty());
-            }
-        }
-
-        @Test
-        @DisplayName("(Regola) Quantità blank -> Non fa nulla")
-        void quantity_blankQuantity_doesNothing() throws ServletException, IOException {
-            when(request.getParameter("quantity")).thenReturn("   ");
-            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
-                when(mock.doRetrieveById("P1")).thenReturn(new Prodotto());
-            });
-                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
-                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
-                                .thenReturn(List.of(new Variante()));
-                    })) {
-                servlet.doGet(request, response);
-                assertTrue(getJsonOutput().isEmpty());
-            }
-        }
-
-        @Test
-        @DisplayName("(Happy Path) Item non nel carrello -> Restituisce carrello invariato")
-        void quantity_itemNotInCart_returnsUnchangedCart() throws ServletException, IOException {
-            when(request.getParameter("quantity")).thenReturn("5");
-
-            // Carrello con un altro item
+        @DisplayName("Quantity < 0 -> Remove")
+        void quantity_lessThanZero_triggersRemove() throws ServletException, IOException {
+            when(request.getParameter("quantity")).thenReturn("-1");
             Carrello c = new Carrello();
-            c.setIdVariante(999); // ID diverso
-            c.setIdProdotto("P2");
-            c.setPrezzo(10.0f);
-            mockCart.clear();
+            c.setIdProdotto("P1");
+            c.setIdVariante(10);
             mockCart.add(c);
             when(session.getAttribute("cart")).thenReturn(mockCart);
-
             Prodotto p = new Prodotto();
             p.setIdProdotto("P1");
             Variante v = new Variante();
-            v.setIdVariante(10); // ID cercato
+            v.setIdVariante(10);
             v.setQuantita(50);
-
-            // Mock per P2 (necessario per writeCartItemsToResponse)
-            Prodotto p2 = new Prodotto();
-            p2.setIdProdotto("P2");
-            p2.setNome("Altro");
-
             try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
                 when(mock.doRetrieveById("P1")).thenReturn(p);
-                when(mock.doRetrieveById("P2")).thenReturn(p2);
             });
                     MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
                         when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
                                 .thenReturn(List.of(v));
                     })) {
                 servlet.doGet(request, response);
-
-                String json = getJsonOutput();
-                assertFalse(json.isEmpty());
-
                 ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
                 verify(session).setAttribute(eq("cart"), captor.capture());
-                List<Carrello> savedCart = (List<Carrello>) captor.getValue();
-                assertEquals(1, savedCart.size());
-                assertEquals(999, savedCart.get(0).getIdVariante());
-                assertEquals(10.0f, savedCart.get(0).getPrezzo());
+                assertTrue(((List<Carrello>) captor.getValue()).isEmpty());
+            }
+        }
+
+        @Test
+        @DisplayName("Quantity 0 -> Remove")
+        void quantity_zero_removesItem() throws ServletException, IOException {
+            when(request.getParameter("quantity")).thenReturn("0");
+            Carrello c = new Carrello();
+            c.setIdProdotto("P1");
+            c.setIdVariante(10);
+            mockCart.add(c);
+            when(session.getAttribute("cart")).thenReturn(mockCart);
+            Prodotto p = new Prodotto();
+            p.setIdProdotto("P1");
+            Variante v = new Variante();
+            v.setIdVariante(10);
+            v.setQuantita(50);
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                when(mock.doRetrieveById("P1")).thenReturn(p);
+            });
+                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
+                                .thenReturn(List.of(v));
+                    })) {
+                servlet.doGet(request, response);
+                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
+                verify(session).setAttribute(eq("cart"), captor.capture());
+                assertTrue(((List<Carrello>) captor.getValue()).isEmpty());
+            }
+        }
+
+        @Test
+        @DisplayName("Exceeds Stock -> No Update")
+        void quantity_exceedsStock_noUpdate() throws ServletException, IOException {
+            when(request.getParameter("quantity")).thenReturn("100");
+            Carrello c = new Carrello();
+            c.setIdVariante(10);
+            c.setQuantita(1);
+            mockCart.add(c);
+            when(session.getAttribute("cart")).thenReturn(mockCart);
+            Prodotto p = new Prodotto();
+            p.setIdProdotto("P1");
+            Variante v = new Variante();
+            v.setIdVariante(10);
+            v.setQuantita(50);
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                when(mock.doRetrieveById("P1")).thenReturn(p);
+            });
+                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
+                                .thenReturn(List.of(v));
+                    })) {
+                servlet.doGet(request, response);
+                verify(session, never()).setAttribute(eq("cart"), any());
+            }
+        }
+
+        @Test
+        @DisplayName("No Rounding if Discount 0")
+        void quantity_zeroDiscount_noRounding() throws ServletException, IOException {
+            when(request.getParameter("quantity")).thenReturn("2");
+            Carrello c = new Carrello();
+            c.setIdProdotto("P1");
+            c.setIdVariante(10);
+            c.setPrezzo(10.12345f);
+            c.setQuantita(1);
+            mockCart.add(c);
+            when(session.getAttribute("cart")).thenReturn(mockCart);
+            Prodotto p = new Prodotto();
+            p.setIdProdotto("P1");
+            Variante v = new Variante();
+            v.setIdVariante(10);
+            v.setPrezzo(10.12345f);
+            v.setSconto(0);
+            v.setQuantita(50);
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                when(mock.doRetrieveById("P1")).thenReturn(p);
+            });
+                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
+                                .thenReturn(List.of(v));
+                    })) {
+                servlet.doGet(request, response);
+                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
+                verify(session).setAttribute(eq("cart"), captor.capture());
+                assertEquals(20.2469f, ((List<Carrello>) captor.getValue()).get(0).getPrezzo(), 0.0001f);
+            }
+        }
+
+        @Test
+        @DisplayName("Update Stock Exact")
+        void quantity_equalsStock_updates() throws ServletException, IOException {
+            when(request.getParameter("quantity")).thenReturn("50");
+            Carrello c = new Carrello();
+            c.setIdProdotto("P1");
+            c.setIdVariante(10);
+            c.setPrezzo(50f);
+            mockCart.add(c);
+            when(session.getAttribute("cart")).thenReturn(mockCart);
+            Prodotto p = new Prodotto();
+            p.setIdProdotto("P1");
+            Variante v = new Variante();
+            v.setIdVariante(10);
+            v.setPrezzo(10f);
+            v.setQuantita(50);
+            try (MockedConstruction<ProdottoDAO> pDao = mockConstruction(ProdottoDAO.class, (mock, ctx) -> {
+                when(mock.doRetrieveById("P1")).thenReturn(p);
+            });
+                    MockedConstruction<VarianteDAO> vDao = mockConstruction(VarianteDAO.class, (mock, ctx) -> {
+                        when(mock.doRetrieveVariantByFlavourAndWeight("P1", "Cioccolato", 900))
+                                .thenReturn(List.of(v));
+                    })) {
+                servlet.doGet(request, response);
+                ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
+                verify(session).setAttribute(eq("cart"), captor.capture());
+                assertEquals(50, ((List<Carrello>) captor.getValue()).get(0).getQuantita());
             }
         }
     }

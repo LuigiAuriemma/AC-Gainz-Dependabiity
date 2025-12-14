@@ -53,12 +53,14 @@ class VarianteDAOTest {
             assertTrue(sql.contains("AND c.peso = ?"), "Deve filtrare per peso");
             assertTrue(sql.contains("AND g.nomeGusto = ?"), "Deve filtrare per gusto");
 
-            // Verifica Parametri e Parsing
-            verify(mockPreparedStatement).setString(1, idProd);
+            // Verifica Parametri e Parsing con InOrder per uccidere i mutanti di incremento
+            org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(mockPreparedStatement);
+            inOrder.verify(mockPreparedStatement).setString(1, idProd);
             // Il DAO fa split(" ")[0] su "500 g" -> "500" -> parseInt
-            verify(mockPreparedStatement).setInt(2, 500);
+            inOrder.verify(mockPreparedStatement).setInt(2, 500);
             // Il DAO fa split(" \\(")[0] su "Cioccolato (Best)" -> "Cioccolato"
-            verify(mockPreparedStatement).setString(3, "Cioccolato");
+            inOrder.verify(mockPreparedStatement).setString(3, "Cioccolato");
+            inOrder.verify(mockPreparedStatement).executeQuery();
         }
     }
 
@@ -103,7 +105,20 @@ class VarianteDAOTest {
             when(mockConnection.prepareStatement(sqlCaptor.capture())).thenReturn(mockPreparedStatement);
             when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
 
-            dao.doRetrieveVariantiByProdotti(prodotti);
+            // Setup mock result to insure list is not empty
+            when(mockResultSet.next()).thenReturn(true, false);
+            when(mockResultSet.getInt("id_variante")).thenReturn(99);
+            when(mockResultSet.getString("id_prodotto_variante")).thenReturn("A");
+            when(mockResultSet.getInt("id_gusto")).thenReturn(2);
+            when(mockResultSet.getInt("id_confezione")).thenReturn(3);
+            when(mockResultSet.getInt("quantità")).thenReturn(50);
+            when(mockResultSet.getFloat("prezzo")).thenReturn(20.0f);
+            when(mockResultSet.getInt("sconto")).thenReturn(10);
+            when(mockResultSet.getString("nomeGusto")).thenReturn("Fragola");
+            when(mockResultSet.getInt("peso")).thenReturn(100);
+            when(mockResultSet.getBoolean("evidenza")).thenReturn(true);
+
+            List<Variante> result = dao.doRetrieveVariantiByProdotti(prodotti);
 
             String sql = sqlCaptor.getValue();
 
@@ -113,17 +128,32 @@ class VarianteDAOTest {
             // Verifica parametri
             verify(mockPreparedStatement).setString(1, "A");
             verify(mockPreparedStatement).setString(2, "B");
+
+            // KILL MUTANT: replaced return value with Collections.emptyList
+            assertFalse(result.isEmpty());
+            assertEquals(1, result.size());
+            Variante v = result.get(0);
+            assertEquals(99, v.getIdVariante());
+            assertEquals("A", v.getIdProdotto());
+            assertEquals(2, v.getIdGusto());
+            assertEquals(3, v.getIdConfezione());
+            assertEquals(50, v.getQuantita());
+            assertEquals(20.0f, v.getPrezzo());
+            assertEquals(10, v.getSconto());
+            assertEquals("Fragola", v.getGusto());
+            assertEquals(100, v.getPesoConfezione());
+            assertTrue(v.isEvidenza());
         }
     }
 
     @Test
-    void doRetrieveVariantiByProdotti_EmptyList_ReturnsEmptyImmediately() {
-        // Verifica ottimizzazione: se la lista è vuota non deve chiamare il DB
+    void doRetrieveVariantiByProdotti_EmptyList_ReturnsMutableList() {
         List<Prodotto> emptyList = new ArrayList<>();
         List<Variante> result = dao.doRetrieveVariantiByProdotti(emptyList);
 
         assertTrue(result.isEmpty());
-        // ConPool non dovrebbe essere chiamato se l'ottimizzazione funziona
+        // Verify mutability to kill Collections.emptyList mutant
+        assertDoesNotThrow(() -> result.add(new Variante()));
     }
 
     // --- TEST Switch Case Criteria ---
@@ -189,15 +219,32 @@ class VarianteDAOTest {
 
             when(mockResultSet.next()).thenReturn(true, false);
             when(mockResultSet.getInt("id_variante")).thenReturn(1);
+            when(mockResultSet.getString("id_prodotto_variante")).thenReturn("P1");
+            when(mockResultSet.getInt("id_gusto")).thenReturn(2);
+            when(mockResultSet.getInt("id_confezione")).thenReturn(3);
+            when(mockResultSet.getInt("quantità")).thenReturn(50);
+            when(mockResultSet.getFloat("prezzo")).thenReturn(20.0f);
             when(mockResultSet.getInt("sconto")).thenReturn(10);
-            // Testiamo un campo JOIN
             when(mockResultSet.getString("nomeGusto")).thenReturn("Fragola");
+            when(mockResultSet.getInt("peso")).thenReturn(100);
+            when(mockResultSet.getBoolean("evidenza")).thenReturn(true);
 
             List<Variante> result = dao.doRetrieveVariantiByIdProdotto("P1");
 
             assertEquals(1, result.size());
-            assertEquals("Fragola", result.get(0).getGusto());
-            assertEquals(10, result.get(0).getSconto());
+            Variante v = result.get(0);
+            assertEquals(1, v.getIdVariante());
+            assertEquals("P1", v.getIdProdotto());
+            assertEquals(2, v.getIdGusto());
+            assertEquals(3, v.getIdConfezione());
+            assertEquals(50, v.getQuantita());
+            assertEquals(20.0f, v.getPrezzo());
+            assertEquals(10, v.getSconto());
+            assertEquals("Fragola", v.getGusto());
+            assertEquals(100, v.getPesoConfezione());
+            assertTrue(v.isEvidenza());
+
+            verify(mockPreparedStatement).setString(1, "P1");
         }
     }
 
@@ -219,7 +266,12 @@ class VarianteDAOTest {
             dao.doSaveVariante(v);
 
             verify(mockPreparedStatement).setString(1, "P_NEW");
-            verify(mockPreparedStatement).setBoolean(7, true); // Evidenza
+            verify(mockPreparedStatement).setInt(2, 1);
+            verify(mockPreparedStatement).setInt(3, 2);
+            verify(mockPreparedStatement).setFloat(4, 10.0f);
+            verify(mockPreparedStatement).setInt(5, 100);
+            verify(mockPreparedStatement).setInt(6, 5);
+            verify(mockPreparedStatement).setBoolean(7, true);
             verify(mockPreparedStatement).executeUpdate();
         }
     }
@@ -233,11 +285,31 @@ class VarianteDAOTest {
             when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
 
             when(mockResultSet.next()).thenReturn(true, false);
+            when(mockResultSet.getInt("id_variante")).thenReturn(77);
+            when(mockResultSet.getString("id_prodotto_variante")).thenReturn("P1");
+            when(mockResultSet.getInt("id_gusto")).thenReturn(1);
+            when(mockResultSet.getInt("id_confezione")).thenReturn(2);
+            when(mockResultSet.getInt("quantità")).thenReturn(33);
             when(mockResultSet.getFloat("prezzo")).thenReturn(9.99f);
+            when(mockResultSet.getInt("sconto")).thenReturn(5);
+            when(mockResultSet.getBoolean("evidenza")).thenReturn(true);
+            when(mockResultSet.getString("nomeGusto")).thenReturn("Cheapest");
+            when(mockResultSet.getInt("peso")).thenReturn(150);
 
             Variante result = dao.doRetrieveCheapestVariant("P1");
 
+            assertEquals(77, result.getIdVariante());
+            assertEquals("P1", result.getIdProdotto());
+            assertEquals(1, result.getIdGusto());
+            assertEquals(2, result.getIdConfezione());
+            assertEquals(33, result.getQuantita());
             assertEquals(9.99f, result.getPrezzo());
+            assertEquals(5, result.getSconto());
+            assertTrue(result.isEvidenza());
+            assertEquals("Cheapest", result.getGusto());
+            assertEquals(150, result.getPesoConfezione());
+
+            verify(mockPreparedStatement).setString(1, "P1");
         }
     }
 
@@ -252,12 +324,37 @@ class VarianteDAOTest {
 
             when(mockResultSet.next()).thenReturn(true, true, false);
             when(mockResultSet.getInt("id_variante")).thenReturn(1, 2);
+            when(mockResultSet.getString("id_prodotto_variante")).thenReturn("P1", "P2");
+            when(mockResultSet.getInt("id_gusto")).thenReturn(2, 3);
+            when(mockResultSet.getInt("id_confezione")).thenReturn(3, 4);
+            when(mockResultSet.getInt("quantità")).thenReturn(50, 60);
+            when(mockResultSet.getFloat("prezzo")).thenReturn(20.0f, 30.0f);
+            when(mockResultSet.getInt("sconto")).thenReturn(10, 15);
+            when(mockResultSet.getBoolean("evidenza")).thenReturn(true, false);
 
             List<Variante> result = dao.doRetrieveAll();
 
             assertEquals(2, result.size());
-            assertEquals(1, result.get(0).getIdVariante());
-            assertEquals(2, result.get(1).getIdVariante());
+
+            Variante v1 = result.get(0);
+            assertEquals(1, v1.getIdVariante());
+            assertEquals("P1", v1.getIdProdotto());
+            assertEquals(2, v1.getIdGusto());
+            assertEquals(3, v1.getIdConfezione());
+            assertEquals(50, v1.getQuantita());
+            assertEquals(20.0f, v1.getPrezzo());
+            assertEquals(10, v1.getSconto());
+            assertTrue(v1.isEvidenza());
+
+            Variante v2 = result.get(1);
+            assertEquals(2, v2.getIdVariante());
+            assertEquals("P2", v2.getIdProdotto());
+            assertEquals(3, v2.getIdGusto());
+            assertEquals(4, v2.getIdConfezione());
+            assertEquals(60, v2.getQuantita());
+            assertEquals(30.0f, v2.getPrezzo());
+            assertEquals(15, v2.getSconto());
+            assertFalse(v2.isEvidenza());
         }
     }
 
@@ -269,12 +366,35 @@ class VarianteDAOTest {
             when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
 
             when(mockResultSet.next()).thenReturn(true, false);
+            when(mockResultSet.getInt("id_variante")).thenReturn(99);
             when(mockResultSet.getString("nomeGusto")).thenReturn("Fragola");
+            when(mockResultSet.getFloat("prezzo")).thenReturn(5.5f);
+
+            // Mock other fields with NON-DEFAULT values
+            when(mockResultSet.getString("id_prodotto_variante")).thenReturn("P1");
+            when(mockResultSet.getInt("id_gusto")).thenReturn(11);
+            when(mockResultSet.getInt("id_confezione")).thenReturn(22);
+            when(mockResultSet.getInt("quantità")).thenReturn(33);
+            when(mockResultSet.getInt("sconto")).thenReturn(44);
+            when(mockResultSet.getBoolean("evidenza")).thenReturn(true);
+            when(mockResultSet.getInt("peso")).thenReturn(555);
 
             List<Variante> result = dao.doRetrieveVariantByFlavourAndWeight("P1", "Fragola", 500);
 
             assertEquals(1, result.size());
-            assertEquals("Fragola", result.get(0).getGusto());
+            Variante v = result.get(0);
+            assertEquals("Fragola", v.getGusto());
+            assertEquals(99, v.getIdVariante());
+            assertEquals(5.5f, v.getPrezzo());
+
+            // Assert all fields
+            assertEquals("P1", v.getIdProdotto());
+            assertEquals(11, v.getIdGusto());
+            assertEquals(22, v.getIdConfezione());
+            assertEquals(33, v.getQuantita());
+            assertEquals(44, v.getSconto());
+            assertTrue(v.isEvidenza());
+            assertEquals(555, v.getPesoConfezione());
 
             verify(mockPreparedStatement).setString(1, "P1");
             verify(mockPreparedStatement).setString(2, "Fragola");
@@ -291,11 +411,36 @@ class VarianteDAOTest {
 
             when(mockResultSet.next()).thenReturn(true);
             when(mockResultSet.getInt("id_variante")).thenReturn(123);
+            when(mockResultSet.getString("id_prodotto_variante")).thenReturn("P1");
+            when(mockResultSet.getInt("id_gusto")).thenReturn(2);
+            when(mockResultSet.getInt("id_confezione")).thenReturn(3);
+            when(mockResultSet.getInt("quantità")).thenReturn(50);
+            when(mockResultSet.getFloat("prezzo")).thenReturn(15.0f);
+
+            // Mock NON-DEFAULT values
+            when(mockResultSet.getInt("sconto")).thenReturn(10); // Not 0
+            when(mockResultSet.getBoolean("evidenza")).thenReturn(true); // Not false
+
+            when(mockResultSet.getString("nomeGusto")).thenReturn("A");
+            when(mockResultSet.getInt("peso")).thenReturn(100);
 
             Variante result = dao.doRetrieveVarianteByIdVariante(123);
 
             assertNotNull(result);
             assertEquals(123, result.getIdVariante());
+            assertEquals("P1", result.getIdProdotto());
+            assertEquals(2, result.getIdGusto());
+            assertEquals(3, result.getIdConfezione());
+            assertEquals(50, result.getQuantita());
+            assertEquals(15.0f, result.getPrezzo());
+
+            // Assert NON-DEFAULT values
+            assertEquals(10, result.getSconto());
+            assertTrue(result.isEvidenza());
+
+            assertEquals("A", result.getGusto());
+            assertEquals(100, result.getPesoConfezione());
+
             verify(mockPreparedStatement).setInt(1, 123);
         }
     }
@@ -335,7 +480,12 @@ class VarianteDAOTest {
 
             verify(mockPreparedStatement).setInt(1, 1); // id_variante (set)
             verify(mockPreparedStatement).setString(2, "P1");
+            verify(mockPreparedStatement).setInt(3, 2);
+            verify(mockPreparedStatement).setInt(4, 3);
             verify(mockPreparedStatement).setFloat(5, 15.0f);
+            verify(mockPreparedStatement).setInt(6, 50);
+            verify(mockPreparedStatement).setInt(7, 0);
+            verify(mockPreparedStatement).setBoolean(8, false);
             verify(mockPreparedStatement).setInt(9, 1); // where id_variante
             verify(mockPreparedStatement).executeUpdate();
         }
@@ -553,6 +703,97 @@ class VarianteDAOTest {
     }
 
     @Test
+    void doRetrieveFilteredVariantiByIdProdotto_ReturnsData() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            // Return 2 rows to check logic
+            when(mockResultSet.next()).thenReturn(true, true, false);
+            when(mockResultSet.getInt("id_variante")).thenReturn(10, 20);
+            when(mockResultSet.getString("id_prodotto_variante")).thenReturn("P1", "P1");
+            when(mockResultSet.getInt("id_gusto")).thenReturn(1, 2);
+            when(mockResultSet.getInt("id_confezione")).thenReturn(1, 2);
+            when(mockResultSet.getInt("quantità")).thenReturn(5, 5);
+            when(mockResultSet.getFloat("prezzo")).thenReturn(10f, 20f);
+            when(mockResultSet.getInt("sconto")).thenReturn(0, 5);
+            when(mockResultSet.getBoolean("evidenza")).thenReturn(false, true);
+            when(mockResultSet.getString("nomeGusto")).thenReturn("G1", "G2");
+            when(mockResultSet.getInt("peso")).thenReturn(100, 200);
+
+            List<Variante> result = dao.doRetrieveFilteredVariantiByIdProdotto("P1", null, null);
+
+            assertEquals(2, result.size());
+            Variante v1 = result.get(0);
+            assertEquals(10, v1.getIdVariante());
+            assertEquals("P1", v1.getIdProdotto());
+            assertEquals(1, v1.getIdGusto());
+            assertEquals(1, v1.getIdConfezione());
+            assertEquals(5, v1.getQuantita());
+            assertEquals(10f, v1.getPrezzo());
+            assertEquals(0, v1.getSconto());
+            assertFalse(v1.isEvidenza());
+            assertEquals("G1", v1.getGusto());
+            assertEquals(100, v1.getPesoConfezione());
+
+            // Check v2 which has non-default values to kill setter mutants (sconto=5,
+            // evidenza=true)
+            Variante v2 = result.get(1);
+            assertEquals(20, v2.getIdVariante());
+            assertEquals("P1", v2.getIdProdotto());
+            assertEquals(2, v2.getIdGusto());
+            assertEquals(2, v2.getIdConfezione());
+            assertEquals(5, v2.getQuantita());
+            assertEquals(20f, v2.getPrezzo());
+            assertEquals(5, v2.getSconto());
+            assertTrue(v2.isEvidenza());
+            assertEquals("G2", v2.getGusto());
+            assertEquals(200, v2.getPesoConfezione());
+
+            // Kill EmptyObjectReturnValsMutator
+            assertFalse(result.isEmpty());
+        }
+    }
+
+    @Test
+    void doRetrieveVariantByCriteria_ReturnsData() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            when(mockResultSet.next()).thenReturn(true, false);
+            when(mockResultSet.getInt("id_variante")).thenReturn(55);
+            when(mockResultSet.getString("id_prodotto_variante")).thenReturn("P1");
+            when(mockResultSet.getInt("id_gusto")).thenReturn(1);
+            when(mockResultSet.getInt("id_confezione")).thenReturn(1);
+            when(mockResultSet.getInt("quantità")).thenReturn(10);
+            when(mockResultSet.getFloat("prezzo")).thenReturn(100f);
+            when(mockResultSet.getInt("sconto")).thenReturn(5);
+            when(mockResultSet.getBoolean("evidenza")).thenReturn(true);
+            when(mockResultSet.getString("nomeGusto")).thenReturn("G1");
+            when(mockResultSet.getInt("peso")).thenReturn(500);
+
+            List<Variante> result = dao.doRetrieveVariantByCriteria("P1", "flavour", "Vanilla");
+
+            assertEquals(1, result.size());
+            // Kill EmptyObjectReturnValsMutator and setter mutants
+            Variante v = result.get(0);
+            assertEquals(55, v.getIdVariante());
+            assertEquals("P1", v.getIdProdotto());
+            assertEquals(1, v.getIdGusto());
+            assertEquals(1, v.getIdConfezione());
+            assertEquals(10, v.getQuantita());
+            assertEquals(100f, v.getPrezzo());
+            assertEquals(5, v.getSconto());
+            assertTrue(v.isEvidenza());
+            assertEquals("G1", v.getGusto());
+            assertEquals(500, v.getPesoConfezione());
+        }
+    }
+
+    @Test
     void doRetrieveCheapestFiltered_EvidenceFalse() throws SQLException {
         try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
             mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
@@ -581,6 +822,51 @@ class VarianteDAOTest {
             Variante result = dao.doRetrieveCheapestFilteredVarianteByIdProdotto("P1", null, null, false);
 
             assertNull(result);
+        }
+    }
+
+    @Test
+    void doRetrieveCheapestFilteredVarianteByIdProdotto_ReturnsCorrectData() throws SQLException {
+        try (MockedStatic<ConPool> mockedConPool = Mockito.mockStatic(ConPool.class)) {
+            mockedConPool.when(ConPool::getConnection).thenReturn(mockConnection);
+            ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+            when(mockConnection.prepareStatement(sqlCaptor.capture())).thenReturn(mockPreparedStatement);
+            when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+            when(mockResultSet.next()).thenReturn(true);
+            when(mockResultSet.getInt("id_variante")).thenReturn(88);
+            when(mockResultSet.getString("id_prodotto_variante")).thenReturn("P1");
+            when(mockResultSet.getInt("id_gusto")).thenReturn(1);
+            when(mockResultSet.getInt("id_confezione")).thenReturn(2);
+            when(mockResultSet.getInt("quantità")).thenReturn(10);
+            when(mockResultSet.getFloat("prezzo")).thenReturn(12.5f);
+            when(mockResultSet.getInt("sconto")).thenReturn(5);
+            when(mockResultSet.getBoolean("evidenza")).thenReturn(true);
+            when(mockResultSet.getString("nomeGusto")).thenReturn("CheapestFiltered");
+            when(mockResultSet.getInt("peso")).thenReturn(300);
+
+            Variante result = dao.doRetrieveCheapestFilteredVarianteByIdProdotto("P1", "300 g",
+                    "CheapestFiltered (Best)", true);
+
+            assertNotNull(result);
+            assertEquals(88, result.getIdVariante());
+            assertEquals("P1", result.getIdProdotto());
+            assertEquals(1, result.getIdGusto());
+            assertEquals(2, result.getIdConfezione());
+            assertEquals(10, result.getQuantita());
+            assertEquals(12.5f, result.getPrezzo());
+            assertEquals(5, result.getSconto());
+            assertTrue(result.isEvidenza());
+            assertEquals("CheapestFiltered", result.getGusto());
+            assertEquals(300, result.getPesoConfezione());
+
+            // Verify filters were applied (checks correct parsing too) with InOrder
+            org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(mockPreparedStatement);
+            inOrder.verify(mockPreparedStatement).setString(1, "P1");
+            // The order depends on implementation, usually weight then taste
+            inOrder.verify(mockPreparedStatement).setInt(2, 300);
+            inOrder.verify(mockPreparedStatement).setString(3, "CheapestFiltered");
+            inOrder.verify(mockPreparedStatement).executeQuery();
         }
     }
 

@@ -2,6 +2,8 @@ package controller.utente;
 
 import controller.utente.RegistrazioneServlet;
 import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -15,6 +17,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.MockedConstruction;
 
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -22,7 +26,8 @@ import static org.mockito.Mockito.*;
 
 /**
  * Test di unità per la RegistrazioneServlet.
- * Copre i rami di validazione, i rami che dipendono dal DAO, il caso di successo e la delega doGet->doPost.
+ * Copre i rami di validazione, i rami che dipendono dal DAO, il caso di
+ * successo e la delega doGet->doPost.
  */
 public class RegistrazioneServletTest {
 
@@ -31,25 +36,36 @@ public class RegistrazioneServletTest {
     private HttpServletResponse response;
     private HttpSession session;
     private RequestDispatcher dispatcher;
+    private ServletContext servletContext; // Mocked for logging
 
     @BeforeEach
-    void setup() {
-        servlet = new RegistrazioneServlet();
+    void setup() throws ServletException {
+        // Use a SPY to allow mocking doPost for doGet tests
+        servlet = spy(new RegistrazioneServlet());
+
         request = mock(HttpServletRequest.class);
         response = mock(HttpServletResponse.class);
         session = mock(HttpSession.class);
         dispatcher = mock(RequestDispatcher.class);
 
+        // Mock ServletConfig and ServletContext for log() support
+        ServletConfig servletConfig = mock(ServletConfig.class);
+        servletContext = mock(ServletContext.class);
+        when(servletConfig.getServletContext()).thenReturn(servletContext);
+        when(servletConfig.getServletName()).thenReturn("RegistrazioneServlet");
+
+        // Init the spy
+        servlet.init(servletConfig);
+
         when(request.getSession()).thenReturn(session);
         when(request.getRequestDispatcher("Registrazione.jsp")).thenReturn(dispatcher);
 
-        // Valori "validi" predefiniti per tutti i parametri, così i singoli test
-        // possono cambiare solo il campo che vogliono invalidare.
+        // Valori "validi" predefiniti
         when(request.getParameter("email")).thenReturn("user@example.com");
         when(request.getParameter("password")).thenReturn("Password1!");
         when(request.getParameter("nome")).thenReturn("Mario");
         when(request.getParameter("cognome")).thenReturn("Rossi");
-        when(request.getParameter("codiceFiscale")).thenReturn("RSSMRA85T10A562S"); // CF valido
+        when(request.getParameter("codiceFiscale")).thenReturn("RSSMRA85T10A562S");
         when(request.getParameter("dataDiNascita")).thenReturn("1995-01-15");
         when(request.getParameter("indirizzo")).thenReturn("Via Roma 1, Napoli");
         when(request.getParameter("numCellulare")).thenReturn("3331234567");
@@ -177,6 +193,11 @@ public class RegistrazioneServletTest {
             assertEquals("Via Roma 1, Napoli", salvato.getIndirizzo());
             assertEquals("3331234567", salvato.getTelefono());
             assertNotEquals("Password1!", salvato.getPassword());
+
+            // VERIFICA DATA DI NASCITA (KILL SURVIVED MUTANT)
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            Date expectedDate = sdf.parse("1995-01-15");
+            assertEquals(expectedDate, salvato.getDataNascita(), "Data di nascita non corrisponde");
         }
     }
 
@@ -189,5 +210,61 @@ public class RegistrazioneServletTest {
         verify(request).setAttribute(eq("error"), eq("Pattern email non rispettato"));
         verify(dispatcher).forward(request, response);
         verify(response, never()).sendRedirect(anyString());
+    }
+
+    // --- NUOVI TEST PER GESTIONE ECCEZIONI (KILL NO_COVERAGE MUTANTS) ---
+
+    @Test
+    @DisplayName("doGet lancia eccezione -> Logga e invia 500")
+    void doGet_exception_sendsError500() throws ServletException, IOException {
+        // Stub doPost on the SPY to throw exception directly to doGet
+        doThrow(new ServletException("Crash in doGet")).when(servlet).doPost(any(), any());
+
+        servlet.doGet(request, response);
+
+        // Verify with prefix added by GenericServlet
+        verify(servletContext).log(eq("RegistrazioneServlet: Errore in RegistrazioneServlet doGet"),
+                any(Exception.class));
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore interno.");
+    }
+
+    @Test
+    @DisplayName("doGet lancia eccezione ma risposta committata -> Logga ma NO 500")
+    void doGet_exception_committed_doesNotSendError() throws ServletException, IOException {
+        when(response.isCommitted()).thenReturn(true);
+        // Stub doPost on the SPY
+        doThrow(new ServletException("Crash in doGet")).when(servlet).doPost(any(), any());
+
+        servlet.doGet(request, response);
+
+        verify(servletContext).log(eq("RegistrazioneServlet: Errore in RegistrazioneServlet doGet"),
+                any(Exception.class));
+        verify(response, never()).sendError(anyInt(), anyString());
+    }
+
+    @Test
+    @DisplayName("doPost lancia eccezione -> Logga e invia 500")
+    void doPost_exception_sendsError500() throws ServletException, IOException {
+        // Simuliamo un errore nel recupero parametri
+        when(request.getParameter("email")).thenThrow(new RuntimeException("Crash in doPost"));
+
+        servlet.doPost(request, response);
+
+        verify(servletContext).log(eq("RegistrazioneServlet: Errore in RegistrazioneServlet doPost"),
+                any(Exception.class));
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Errore durante la registrazione.");
+    }
+
+    @Test
+    @DisplayName("doPost lancia eccezione ma risposta committata -> Logga ma NO 500")
+    void doPost_exception_committed_doesNotSendError() throws ServletException, IOException {
+        when(response.isCommitted()).thenReturn(true);
+        when(request.getParameter("email")).thenThrow(new RuntimeException("Crash in doPost"));
+
+        servlet.doPost(request, response);
+
+        verify(servletContext).log(eq("RegistrazioneServlet: Errore in RegistrazioneServlet doPost"),
+                any(Exception.class));
+        verify(response, never()).sendError(anyInt(), anyString());
     }
 }
