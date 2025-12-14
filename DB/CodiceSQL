@@ -248,7 +248,7 @@ CREATE INDEX idx_variante_prezzo_sconto_evidenza ON variante((prezzo * (1 - scon
 
 
 
-INSERT INTO Progetto_TSW_Dependability.utente (email, password, nome, cognome, codice_fiscale, data_di_nascita, indirizzo, numero_di_cellulare, poteri) VALUES ('luigiauriemma@gmail.com', '35606aa3534faf35c50f97cbbf387d78f5063cf9', 'Raffaele', 'Coppola', 'CPPRFL03T28H703E', '2003-12-28', 'Via Giovanni Verga, 3', '3896630640', 1);
+INSERT INTO Progetto_TSW_Dependability.utente (email, password, nome, cognome, codice_fiscale, data_di_nascita, indirizzo, numero_di_cellulare, poteri) VALUES ('luigiauriemma@gmail.com', '7c71c089316d7af9e21e7ccc2baf00aaf21e704153e546c67b986391b0f04185a1675c9013bbab4257ed664caa409df9fe5d2b1eaded8e945691b166d0bb513a', 'Raffaele', 'Coppola', 'CPPRFL03T28H703E', '2003-12-28', 'Via Giovanni Verga, 3', '3896630640', 1); -- Old SHA-1 hash: 35606aa3534faf35c50f97cbbf387d78f5063cf9
 
 
 INSERT INTO Progetto_TSW_Dependability.prodotto (id_prodotto, nome, descrizione, categoria, immagine, calorie, carboidrati, proteine, grassi) VALUES ('B001', 'Barretta proteica ', 'Una barretta proteica gourmet che offre il massimo in termini di sapore, consistenza e nutrizione. Ogni barretta è ricca di 20 g di proteine e a basso contenuto di zuccheri, rendendola perfetta per spuntini in movimento o come fonte di nutrimento extra tra i pasti.', 'barrette', 'Immagini/barrettaCioccCaramell.png', 361, 33, 32, 13);
