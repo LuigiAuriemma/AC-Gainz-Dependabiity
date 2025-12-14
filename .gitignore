@@ -46,3 +46,4 @@ dependency-reduced-pom.xml
 ### Logs and Temp files ###
 *.log
 *.tmp
+.env

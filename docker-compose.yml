@@ -1,15 +1,15 @@
 services:
   db:
-    image: mysql:8.0
+    image: luigiauriemma/ac-gainz-db:latest
+    build: ./DB
     environment:
-      MYSQL_ROOT_PASSWORD: 123456789
-      MYSQL_DATABASE: Progetto_TSW_Dependability
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
       TZ: Europe/Rome
     volumes:
       - dbdata:/var/lib/mysql
-      - ./DB/CodiceSQL:/docker-entrypoint-initdb.d/seed.sql:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p123456789"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 5s
       timeout: 3s
       retries: 40
@@ -21,11 +21,11 @@ services:
       db:
         condition: service_healthy
     environment:
-      DB_HOST: db
-      DB_PORT: "3306"
-      DB_NAME: Progetto_TSW_Dependability
-      DB_USER: root
-      DB_PASS: 123456789
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
     ports:
       - "8080:8080"
     restart: unless-stopped

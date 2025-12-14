@@ -15,12 +15,23 @@ public class ConPool {
         if (dataSource == null) {
             PoolProperties p = new PoolProperties();
 
-            String host = System.getenv().getOrDefault("DB_HOST", "localhost");
-            String port = System.getenv().getOrDefault("DB_PORT", "3306");
-            String db   = System.getenv().getOrDefault("DB_NAME", "Progetto_TSW_Dependability");
-            String user = System.getenv().getOrDefault("DB_USER", "root");
-            String pass = System.getenv().getOrDefault("DB_PASS", "123456789");
-            String tz   = TimeZone.getDefault().getID();
+            String host = System.getenv("DB_HOST");
+            String port = System.getenv("DB_PORT");
+            String db = System.getenv("DB_NAME");
+            String user = System.getenv("DB_USER");
+            String pass = System.getenv("DB_PASS");
+
+            if (host == null)
+                host = "localhost"; // Safe default
+            if (port == null)
+                port = "3306"; // Safe default
+            if (db == null)
+                db = "Progetto_TSW_Dependability"; // Safe default
+            if (user == null)
+                user = "root"; // Safe default
+            if (pass == null)
+                throw new RuntimeException("DB_PASS environment variable not set!");
+            String tz = TimeZone.getDefault().getID();
 
             p.setUrl("jdbc:mysql://" + host + ":" + port + "/" + db + "?serverTimezone=" + tz);
             p.setDriverClassName("com.mysql.cj.jdbc.Driver");
