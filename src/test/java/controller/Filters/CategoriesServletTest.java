@@ -206,7 +206,10 @@ public class CategoriesServletTest {
         // Trigger checked exception caught by servlet
         doThrow(new ServletException("Crash doGet")).when(dispatcher).forward(any(), any());
 
-        servlet.doGet(request, response);
+        // Mock ProdottoDAO execution to avoid DB connection
+        try (MockedConstruction<ProdottoDAO> mockedDao = mockConstruction(ProdottoDAO.class)) {
+            servlet.doGet(request, response);
+        }
 
         verify(servletContext).log(eq("CategoriesServlet: Errore in CategoriesServlet doGet"), any(Exception.class));
         verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
@@ -219,7 +222,10 @@ public class CategoriesServletTest {
         when(response.isCommitted()).thenReturn(true);
         doThrow(new ServletException("Crash doGet")).when(dispatcher).forward(any(), any());
 
-        servlet.doGet(request, response);
+        // Mock ProdottoDAO execution to avoid DB connection
+        try (MockedConstruction<ProdottoDAO> mockedDao = mockConstruction(ProdottoDAO.class)) {
+            servlet.doGet(request, response);
+        }
 
         verify(servletContext).log(eq("CategoriesServlet: Errore in CategoriesServlet doGet"), any(Exception.class));
         verify(response, never()).sendError(anyInt(), anyString());
