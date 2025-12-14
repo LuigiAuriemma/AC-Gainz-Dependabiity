@@ -20,17 +20,6 @@ public class ConPool {
             String db = System.getenv("DB_NAME");
             String user = System.getenv("DB_USER");
             String pass = System.getenv("DB_PASS");
-
-            if (host == null)
-                host = "localhost"; // Safe default
-            if (port == null)
-                port = "3306"; // Safe default
-            if (db == null)
-                db = "Progetto_TSW_Dependability"; // Safe default
-            if (user == null)
-                user = "root"; // Safe default
-            if (pass == null)
-                throw new RuntimeException("DB_PASS environment variable not set!");
             String tz = TimeZone.getDefault().getID();
 
             p.setUrl("jdbc:mysql://" + host + ":" + port + "/" + db + "?serverTimezone=" + tz);
