@@ -2,15 +2,15 @@ name: Java CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 # --- VARIABILI GLOBALI ---
 # Definiamo qui le versioni per non ripeterle in ogni job
 env:
-  JAVA_VERSION: '21'
-  JAVA_DISTRO: 'temurin'
+  JAVA_VERSION: "21"
+  JAVA_DISTRO: "temurin"
 
 jobs:
   # --- JOB 1: SECURITY SCANNING ---
@@ -118,3 +118,20 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      # --- Metadati per Docker Hub (DB) ---
+      - name: Extract Docker metadata (DB)
+        id: meta-db
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/ac-gainz-dependabilitydb
+
+      # --- Build e Push (DB) ---
+      - name: Build and push Docker image (DB)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./DB
+          file: ./DB/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-db.outputs.tags }}
+          labels: ${{ steps.meta-db.outputs.labels }}

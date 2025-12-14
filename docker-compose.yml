@@ -1,7 +1,6 @@
 services:
   db:
-    image: luigiauriemma/ac-gainz-db:latest
-    build: ./DB
+    image: luigiauriemma/ac-gainz-dependabilitydb:latest
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME}
