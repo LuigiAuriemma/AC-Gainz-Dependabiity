@@ -1,6 +1,7 @@
 services:
   db:
     image: luigiauriemma/ac-gainz-dependabilitydb:main
+    platform: linux/amd64
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME}
@@ -8,7 +9,7 @@ services:
     volumes:
       - dbdata:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD"
       interval: 5s
       timeout: 3s
       retries: 40
@@ -16,6 +17,7 @@ services:
 
   web:
     image: luigiauriemma/ac-gainz-dependability:main
+    platform: linux/amd64
     depends_on:
       db:
         condition: service_healthy
